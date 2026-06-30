@@ -1,0 +1,43 @@
+### Register a student
+POST http://localhost:8080/api/auth/student/register
+Content-Type: application/json
+
+{
+  "studentNumber": "S12345678",
+  "firstName": "Kelvin",
+  "lastName": "Mudzingwa",
+  "email": "test@mandela.ac.za",
+  "phone": "0821234567",
+  "password": "test123"
+}
+
+### Login as that student
+POST http://localhost:8080/api/auth/student/login
+Content-Type: application/json
+
+{
+  "email": "test@mandela.ac.za",
+  "password": "test123"
+}
+
+### Register a driver
+POST http://localhost:8080/api/auth/driver/register
+Content-Type: application/json
+
+{
+  "firstName": "Sam",
+  "lastName": "Driver",
+  "email": "sam.driver@example.com",
+  "phone": "0839876543",
+  "password": "driverpass",
+  "role": "STUDENT_DRIVER"
+}
+
+### Login as that driver
+POST http://localhost:8080/api/auth/driver/login
+Content-Type: application/json
+
+{
+  "email": "sam.driver@example.com",
+  "password": "driverpass"
+}
