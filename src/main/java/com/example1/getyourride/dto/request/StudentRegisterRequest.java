@@ -26,6 +26,8 @@ public class StudentRegisterRequest {
             message = "Email must be a valid @mandela.ac.za address"
     )
     private String email;
+    // Add to StudentRegisterRequest.java
+    private Boolean isFunded;
 
     private String phone;
 
