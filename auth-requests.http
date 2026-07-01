@@ -13,13 +13,20 @@ Content-Type: application/json
 
 ### Login as that student
 POST http://localhost:8080/api/auth/student/login
-
 Content-Type: application/json
 
 {
   "email": "test@mandela.ac.za",
   "password": "test123"
 }
+
+> {%
+    client.global.set("student_token", response.body.token);
+%}
+
+### Get trips as a student
+GET http://localhost:8080/api/trips
+Authorization: Bearer {{student_token}}
 
 ### Register a driver
 POST http://localhost:8080/api/auth/driver/register
@@ -42,3 +49,33 @@ Content-Type: application/json
   "email": "sam.driver@example.com",
   "password": "driverpass"
 }
+
+> {%
+    client.global.set("driver_token", response.body.token);
+%}
+
+### Create a Trip (Requires Driver Token)
+POST http://localhost:8080/api/trips
+Content-Type: application/json
+Authorization: Bearer {{driver_token}}
+
+{
+  "tripType": "STUDENT_DRIVER",
+  "departureStop": "Main Campus",
+  "destinationStop": "North Campus",
+  "departureTime": "2026-07-01T10:00:00",
+  "availableSeats": 3,
+  "price": 20.00
+}
+
+### Get all trips
+GET http://localhost:8080/api/trips
+Authorization: Bearer {{driver_token}}
+
+### Get trips by status
+GET http://localhost:8080/api/trips/status/CONFIRMED
+Authorization: Bearer {{driver_token}}
+
+### Update trip status
+PATCH http://localhost:8080/api/trips/1/status?status=COMPLETED
+Authorization: Bearer {{driver_token}}
