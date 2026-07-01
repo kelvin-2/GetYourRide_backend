@@ -148,6 +148,22 @@ public class TripControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "STUDENT")
+    public void testGetTripsByStatusAsStudent() throws Exception {
+        TripResponse trip = TripResponse.builder()
+                .tripId(1L)
+                .driverName("Sam Driver")
+                .status("COMPLETED")
+                .build();
+
+        Mockito.when(tripService.getTripsByStatus("COMPLETED")).thenReturn(Arrays.asList(trip));
+
+        mockMvc.perform(get("/api/trips/status/COMPLETED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("COMPLETED"));
+    }
+
+    @Test
     @WithMockUser
     public void testUpdateTripStatus() throws Exception {
         TripResponse updatedTrip = TripResponse.builder()
