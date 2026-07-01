@@ -61,6 +61,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
     private AuthResponse buildAuthResponse(Student student) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("isFunded", student.getIsFunded());
+        claims.put("role", "STUDENT");
 
         String token = jwtUtil.generateToken(student.getStudentId(), student.getEmail(), "STUDENT", claims);
 
@@ -72,6 +73,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
                 .lastName(student.getLastName())
                 .email(student.getEmail())
                 .isFunded(student.getIsFunded())
+                .role("STUDENT")
                 .build();
     }
 }
