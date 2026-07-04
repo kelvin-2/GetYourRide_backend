@@ -28,6 +28,18 @@ Content-Type: application/json
 GET http://localhost:8080/api/trips
 Authorization: Bearer {{student_token}}
 
+### Get Scheduled trips as a student
+GET http://localhost:8080/api/trips/status/SCHEDULED
+Authorization: Bearer {{student_token}}
+
+### Get Completed trips as a student
+GET http://localhost:8080/api/trips/status/COMPLETED
+Authorization: Bearer {{student_token}}
+
+### Get Cancelled trips as a student
+GET http://localhost:8080/api/trips/status/CANCELLED
+Authorization: Bearer {{student_token}}
+
 ### Register a driver
 POST http://localhost:8080/api/auth/driver/register
 Content-Type: application/json

@@ -44,4 +44,25 @@ public interface TripService {
      * @return The updated trip details.
      */
     TripResponse updateTripStatus(Long tripId, String status);
+
+    /**
+     * Cancels a trip by setting its status to CANCELLED.
+     * @param tripId The ID of the trip.
+     * @return The updated trip details.
+     */
+    TripResponse cancelTrip(Long tripId);
+
+    /**
+     * Completes a trip by setting its status to COMPLETED and recording arrival time.
+     * @param tripId The ID of the trip.
+     * @return The updated trip details.
+     */
+    TripResponse completeTrip(Long tripId);
+
+    /**
+     * Schedules a trip by setting its status to SCHEDULED.
+     * @param tripId The ID of the trip.
+     * @return The updated trip details.
+     */
+    TripResponse scheduleTrip(Long tripId);
 }

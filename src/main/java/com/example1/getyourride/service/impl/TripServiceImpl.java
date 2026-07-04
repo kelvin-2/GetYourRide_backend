@@ -100,13 +100,69 @@ public class TripServiceImpl implements TripService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
         
-        trip.setStatus(status);
+        trip.setStatus(status.toUpperCase()); // Normalize status to uppercase
         if ("COMPLETED".equalsIgnoreCase(status)) {
             trip.setArrivalTime(java.time.LocalDateTime.now());
         }
         
         Trip updatedTrip = tripRepository.save(trip);
         return mapToResponse(updatedTrip);
+    }
+
+    /**
+     * Cancels a trip.
+     * Sets the status to CANCELLED.
+     */
+    @Override
+    @Transactional
+    public TripResponse cancelTrip(Long tripId) {
+        // Find the trip or throw exception
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+        
+        // Update status to CANCELLED
+        trip.setStatus("CANCELLED");
+        
+        // Save and return the updated trip
+        return mapToResponse(tripRepository.save(trip));
+    }
+
+    /**
+     * Completes a trip.
+     * Sets the status to COMPLETED and records the current time as arrival time.
+     */
+    @Override
+    @Transactional
+    public TripResponse completeTrip(Long tripId) {
+        // Find the trip or throw exception
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+        
+        // Update status to COMPLETED
+        trip.setStatus("COMPLETED");
+        // Record arrival time
+        trip.setArrivalTime(java.time.LocalDateTime.now());
+        
+        // Save and return the updated trip
+        return mapToResponse(tripRepository.save(trip));
+    }
+
+    /**
+     * Schedules a trip.
+     * Sets the status to SCHEDULED.
+     */
+    @Override
+    @Transactional
+    public TripResponse scheduleTrip(Long tripId) {
+        // Find the trip or throw exception
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+        
+        // Update status to SCHEDULED
+        trip.setStatus("SCHEDULED");
+        
+        // Save and return the updated trip
+        return mapToResponse(tripRepository.save(trip));
     }
 
     /**
@@ -118,6 +174,9 @@ public class TripServiceImpl implements TripService {
                 .driverId(trip.getDriver().getDriverId())
                 .driverName(trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName())
                 .registrationNumber(trip.getVehicle().getRegistrationNumber())
+                .vehicleModel(trip.getVehicle().getModel())
+                .vehicleColour(trip.getVehicle().getColour())
+                .vehicleCapacity(trip.getVehicle().getCapacity())
                 .tripType(trip.getTripType())
                 .departureStop(trip.getDepartureStop())
                 .destinationStop(trip.getDestinationStop())

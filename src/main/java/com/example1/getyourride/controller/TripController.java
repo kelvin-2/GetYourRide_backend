@@ -75,4 +75,37 @@ public class TripController {
     public ResponseEntity<TripResponse> updateTripStatus(@PathVariable Long id, @RequestParam String status) {
         return ResponseEntity.ok(tripService.updateTripStatus(id, status));
     }
+
+    /**
+     * Cancel a trip.
+     * Changes the status of the trip to CANCELLED.
+     * @param id The trip ID.
+     * @return The updated trip details.
+     */
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<TripResponse> cancelTrip(@PathVariable Long id) {
+        return ResponseEntity.ok(tripService.cancelTrip(id));
+    }
+
+    /**
+     * Mark a trip as completed.
+     * Changes the status of the trip to COMPLETED and sets arrival time.
+     * @param id The trip ID.
+     * @return The updated trip details.
+     */
+    @PatchMapping("/{id}/complete")
+    public ResponseEntity<TripResponse> completeTrip(@PathVariable Long id) {
+        return ResponseEntity.ok(tripService.completeTrip(id));
+    }
+
+    /**
+     * Schedule a trip.
+     * Changes the status of the trip to SCHEDULED.
+     * @param id The trip ID.
+     * @return The updated trip details.
+     */
+    @PatchMapping("/{id}/schedule")
+    public ResponseEntity<TripResponse> scheduleTrip(@PathVariable Long id) {
+        return ResponseEntity.ok(tripService.scheduleTrip(id));
+    }
 }

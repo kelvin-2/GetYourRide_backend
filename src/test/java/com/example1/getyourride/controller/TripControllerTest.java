@@ -43,6 +43,9 @@ public class TripControllerTest {
                 .driverId(1L)
                 .driverName("Sam Driver")
                 .registrationNumber("CAA 12345")
+                .vehicleModel("Toyota Corolla")
+                .vehicleColour("White")
+                .vehicleCapacity(4)
                 .tripType("STUDENT_DRIVER")
                 .status("CONFIRMED")
                 .price(new BigDecimal("20.00"))
@@ -61,6 +64,10 @@ public class TripControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$[0].tripId").value(1L))
                 .andExpect(jsonPath("$[0].driverName").value("Sam Driver"))
+                .andExpect(jsonPath("$[0].registrationNumber").value("CAA 12345"))
+                .andExpect(jsonPath("$[0].vehicleModel").value("Toyota Corolla"))
+                .andExpect(jsonPath("$[0].vehicleColour").value("White"))
+                .andExpect(jsonPath("$[0].vehicleCapacity").value(4))
                 .andExpect(jsonPath("$[0].status").value("CONFIRMED"));
     }
 
@@ -148,6 +155,22 @@ public class TripControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "STUDENT")
+    public void testGetTripsByStatusAsStudent() throws Exception {
+        TripResponse trip = TripResponse.builder()
+                .tripId(1L)
+                .driverName("Sam Driver")
+                .status("COMPLETED")
+                .build();
+
+        Mockito.when(tripService.getTripsByStatus("COMPLETED")).thenReturn(Arrays.asList(trip));
+
+        mockMvc.perform(get("/api/trips/status/COMPLETED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("COMPLETED"));
+    }
+
+    @Test
     @WithMockUser
     public void testUpdateTripStatus() throws Exception {
         TripResponse updatedTrip = TripResponse.builder()
@@ -163,5 +186,52 @@ public class TripControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.arrivalTime").exists());
+    }
+
+    @Test
+    @WithMockUser
+    public void testCancelTrip() throws Exception {
+        TripResponse cancelledTrip = TripResponse.builder()
+                .tripId(1L)
+                .status("CANCELLED")
+                .build();
+
+        Mockito.when(tripService.cancelTrip(1L)).thenReturn(cancelledTrip);
+
+        mockMvc.perform(patch("/api/trips/1/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    @WithMockUser
+    public void testCompleteTrip() throws Exception {
+        TripResponse completedTrip = TripResponse.builder()
+                .tripId(1L)
+                .status("COMPLETED")
+                .arrivalTime(LocalDateTime.now())
+                .build();
+
+        Mockito.when(tripService.completeTrip(1L)).thenReturn(completedTrip);
+
+        mockMvc.perform(patch("/api/trips/1/complete"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.arrivalTime").exists());
+    }
+
+    @Test
+    @WithMockUser
+    public void testScheduleTrip() throws Exception {
+        TripResponse scheduledTrip = TripResponse.builder()
+                .tripId(1L)
+                .status("SCHEDULED")
+                .build();
+
+        Mockito.when(tripService.scheduleTrip(1L)).thenReturn(scheduledTrip);
+
+        mockMvc.perform(patch("/api/trips/1/schedule"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SCHEDULED"));
     }
 }
