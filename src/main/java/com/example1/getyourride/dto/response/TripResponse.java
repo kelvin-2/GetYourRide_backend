@@ -18,6 +18,9 @@ public class TripResponse {
     private Long driverId;
     private String driverName;
     private String registrationNumber;
+    private String vehicleModel;
+    private String vehicleColour;
+    private Integer vehicleCapacity;
     private String tripType;
     private String departureStop;
     private String destinationStop;

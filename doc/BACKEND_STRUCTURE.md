@@ -1,6 +1,6 @@
 # GetYourRide — Backend Architecture & File Structure
 
-Spring Boot + MySQL backend for GetYourRide. This document is the source of truth for where things live. Update it whenever a new package or major file is added.
+Spring Boot + MySQL backend for GetYourRide. This document provides a high-level overview of the backend architecture. For a more detailed technical breakdown, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 **Stack:** Java 17, Spring Boot 3.5.16, Maven, MySQL, JWT auth, plain-text passwords (no hashing — deliberate decision for this project).
 

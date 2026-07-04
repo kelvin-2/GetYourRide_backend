@@ -43,6 +43,9 @@ public class TripControllerTest {
                 .driverId(1L)
                 .driverName("Sam Driver")
                 .registrationNumber("CAA 12345")
+                .vehicleModel("Toyota Corolla")
+                .vehicleColour("White")
+                .vehicleCapacity(4)
                 .tripType("STUDENT_DRIVER")
                 .status("CONFIRMED")
                 .price(new BigDecimal("20.00"))
@@ -61,6 +64,10 @@ public class TripControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$[0].tripId").value(1L))
                 .andExpect(jsonPath("$[0].driverName").value("Sam Driver"))
+                .andExpect(jsonPath("$[0].registrationNumber").value("CAA 12345"))
+                .andExpect(jsonPath("$[0].vehicleModel").value("Toyota Corolla"))
+                .andExpect(jsonPath("$[0].vehicleColour").value("White"))
+                .andExpect(jsonPath("$[0].vehicleCapacity").value(4))
                 .andExpect(jsonPath("$[0].status").value("CONFIRMED"));
     }
 
