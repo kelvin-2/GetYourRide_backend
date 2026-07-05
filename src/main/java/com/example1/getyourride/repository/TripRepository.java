@@ -37,4 +37,13 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
      */
     @EntityGraph(attributePaths = {"driver", "vehicle"})
     List<Trip> findByDriverDriverId(Long driverId);
+
+    /**
+     * Search for trips by departure and destination stop.
+     * @param departure Departure stop keyword.
+     * @param destination Destination stop keyword.
+     * @return List of matching trips.
+     */
+    @EntityGraph(attributePaths = {"driver", "vehicle"})
+    List<Trip> findByDepartureStopContainingIgnoreCaseAndDestinationStopContainingIgnoreCase(String departure, String destination);
 }

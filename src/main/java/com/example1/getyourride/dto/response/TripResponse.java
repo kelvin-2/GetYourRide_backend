@@ -23,7 +23,11 @@ public class TripResponse {
     private Integer vehicleCapacity;
     private String tripType;
     private String departureStop;
+    private Double departureLat;
+    private Double departureLng;
     private String destinationStop;
+    private Double destinationLat;
+    private Double destinationLng;
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer availableSeats;

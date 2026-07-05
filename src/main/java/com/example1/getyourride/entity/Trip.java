@@ -38,8 +38,20 @@ public class Trip {
     @Column(name = "departure_stop", nullable = false)
     private String departureStop;
 
+    @Column(name = "departure_lat")
+    private Double departureLat;
+
+    @Column(name = "departure_lng")
+    private Double departureLng;
+
     @Column(name = "destination_stop", nullable = false)
     private String destinationStop;
+
+    @Column(name = "destination_lat")
+    private Double destinationLat;
+
+    @Column(name = "destination_lng")
+    private Double destinationLng;
 
     @Column(name = "departure_time", nullable = false)
     private LocalDateTime departureTime;

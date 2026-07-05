@@ -108,4 +108,17 @@ public class TripController {
     public ResponseEntity<TripResponse> scheduleTrip(@PathVariable Long id) {
         return ResponseEntity.ok(tripService.scheduleTrip(id));
     }
+
+    /**
+     * Search for trips by departure and destination stops.
+     * @param departure Departure stop address or keyword.
+     * @param destination Destination stop address or keyword.
+     * @return List of matching trips.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<List<TripResponse>> searchTrips(
+            @RequestParam String departure,
+            @RequestParam String destination) {
+        return ResponseEntity.ok(tripService.searchTrips(departure, destination));
+    }
 }

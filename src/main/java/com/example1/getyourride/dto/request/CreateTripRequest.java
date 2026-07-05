@@ -25,6 +25,11 @@ public class CreateTripRequest {
     @NotBlank(message = "Destination stop is required")
     private String destinationStop;
 
+    private Double departureLat;
+    private Double departureLng;
+    private Double destinationLat;
+    private Double destinationLng;
+
     @NotNull(message = "Departure time is required")
     private LocalDateTime departureTime;
 

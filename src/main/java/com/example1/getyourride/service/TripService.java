@@ -65,4 +65,12 @@ public interface TripService {
      * @return The updated trip details.
      */
     TripResponse scheduleTrip(Long tripId);
+
+    /**
+     * Search for trips by departure and destination stops.
+     * @param departure Departure stop address or keyword.
+     * @param destination Destination stop address or keyword.
+     * @return List of matching trips.
+     */
+    List<TripResponse> searchTrips(String departure, String destination);
 }

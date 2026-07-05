@@ -2,6 +2,7 @@ package com.example1.getyourride.service.impl;
 
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.response.TripResponse;
+import com.example1.getyourride.dto.response.GeocodeResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.Vehicle;
@@ -10,6 +11,7 @@ import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.VehicleRepository;
+import com.example1.getyourride.service.GeocodingService;
 import com.example1.getyourride.service.TripService;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -27,13 +29,16 @@ public class TripServiceImpl implements TripService {
     private final TripRepository tripRepository;
     private final DriverRepository driverRepository;
     private final VehicleRepository vehicleRepository;
+    private final GeocodingService geocodingService;
 
     public TripServiceImpl(TripRepository tripRepository, 
                            DriverRepository driverRepository, 
-                           VehicleRepository vehicleRepository) {
+                           VehicleRepository vehicleRepository,
+                           GeocodingService geocodingService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.vehicleRepository = vehicleRepository;
+        this.geocodingService = geocodingService;
     }
 
     @Override
@@ -46,13 +51,12 @@ public class TripServiceImpl implements TripService {
         Driver driver = driverRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
 
-        // Find vehicle belonging to this driver
+        // Get vehicles for the driver
         List<Vehicle> vehicles = vehicleRepository.findByDriverDriverId(driver.getDriverId());
-        if (vehicles.isEmpty()) {
-            throw new ResourceNotFoundException("No vehicle found for the authenticated driver. Please register a vehicle first.");
-        }
-        // For simplicity, we use the first vehicle found for the driver
-        Vehicle vehicle = vehicles.get(0);
+        
+        // For simplicity, we use the first vehicle found for the driver if one exists.
+        // We no longer strictly validate here as requested by user.
+        Vehicle vehicle = vehicles.isEmpty() ? null : vehicles.get(0);
 
         // Create new Trip entity
         Trip trip = new Trip();
@@ -61,6 +65,30 @@ public class TripServiceImpl implements TripService {
         trip.setTripType(request.getTripType());
         trip.setDepartureStop(request.getDepartureStop());
         trip.setDestinationStop(request.getDestinationStop());
+
+        // Handle coordinates - either from request or by geocoding the addresses
+        if (request.getDepartureLat() != null && request.getDepartureLng() != null) {
+            trip.setDepartureLat(request.getDepartureLat());
+            trip.setDepartureLng(request.getDepartureLng());
+        } else {
+            GeocodeResponse departureGeocode = geocodingService.geocode(request.getDepartureStop());
+            if (departureGeocode != null && departureGeocode.isFound()) {
+                trip.setDepartureLat(departureGeocode.getLatitude());
+                trip.setDepartureLng(departureGeocode.getLongitude());
+            }
+        }
+
+        if (request.getDestinationLat() != null && request.getDestinationLng() != null) {
+            trip.setDestinationLat(request.getDestinationLat());
+            trip.setDestinationLng(request.getDestinationLng());
+        } else {
+            GeocodeResponse destinationGeocode = geocodingService.geocode(request.getDestinationStop());
+            if (destinationGeocode != null && destinationGeocode.isFound()) {
+                trip.setDestinationLat(destinationGeocode.getLatitude());
+                trip.setDestinationLng(destinationGeocode.getLongitude());
+            }
+        }
+
         trip.setDepartureTime(request.getDepartureTime());
         trip.setAvailableSeats(request.getAvailableSeats());
         trip.setPrice(request.getPrice());
@@ -165,21 +193,39 @@ public class TripServiceImpl implements TripService {
         return mapToResponse(tripRepository.save(trip));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<TripResponse> searchTrips(String departure, String destination) {
+        return tripRepository.findByDepartureStopContainingIgnoreCaseAndDestinationStopContainingIgnoreCase(departure, destination)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     /**
      * Helper method to map Trip entity to TripResponse DTO.
      */
     private TripResponse mapToResponse(Trip trip) {
-        return TripResponse.builder()
+        TripResponse.TripResponseBuilder builder = TripResponse.builder()
                 .tripId(trip.getTripId())
                 .driverId(trip.getDriver().getDriverId())
-                .driverName(trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName())
-                .registrationNumber(trip.getVehicle().getRegistrationNumber())
-                .vehicleModel(trip.getVehicle().getModel())
-                .vehicleColour(trip.getVehicle().getColour())
-                .vehicleCapacity(trip.getVehicle().getCapacity())
+                .driverName(trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName());
+
+        if (trip.getVehicle() != null) {
+            builder.registrationNumber(trip.getVehicle().getRegistrationNumber())
+                    .vehicleModel(trip.getVehicle().getModel())
+                    .vehicleColour(trip.getVehicle().getColour())
+                    .vehicleCapacity(trip.getVehicle().getCapacity());
+        }
+
+        return builder
                 .tripType(trip.getTripType())
                 .departureStop(trip.getDepartureStop())
+                .departureLat(trip.getDepartureLat())
+                .departureLng(trip.getDepartureLng())
                 .destinationStop(trip.getDestinationStop())
+                .destinationLat(trip.getDestinationLat())
+                .destinationLng(trip.getDestinationLng())
                 .departureTime(trip.getDepartureTime())
                 .arrivalTime(trip.getArrivalTime())
                 .availableSeats(trip.getAvailableSeats())

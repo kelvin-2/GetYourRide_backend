@@ -66,27 +66,78 @@ Content-Type: application/json
     client.global.set("driver_token", response.body.token);
 %}
 
-### Create a Trip (Requires Driver Token)
+### Get my vehicles
+GET http://localhost:8080/api/vehicles/my
+Authorization: Bearer {{driver_token}}
+
+### Get all vehicles
+GET http://localhost:8080/api/vehicles
+Authorization: Bearer {{student_token}}
+
+### Register a Vehicle for the Driver
+POST http://localhost:8080/api/vehicles
+Content-Type: application/json
+Authorization: Bearer {{driver_token}}
+
+{
+  "registrationNumber": "CB123456",
+  "model": "Toyota Corolla",
+  "vehicleYear": 2022,
+  "colour": "White",
+  "capacity": 4
+}
+
+### Create a Trip with Manual Coordinates
 POST http://localhost:8080/api/trips
 Content-Type: application/json
 Authorization: Bearer {{driver_token}}
 
 {
   "tripType": "STUDENT_DRIVER",
-  "departureStop": "Main Campus",
-  "destinationStop": "North Campus",
-  "departureTime": "2026-07-01T10:00:00",
-  "availableSeats": 3,
-  "price": 20.00
+  "departureStop": "Main Campus, Gqeberha",
+  "destinationStop": "North Campus, Gqeberha",
+  "departureLat": -34.0012,
+  "departureLng": 25.6670,
+  "destinationLat": -33.9912,
+  "destinationLng": 25.6770,
+  "departureTime": "2026-07-01T12:00:00",
+  "availableSeats": 4,
+  "price": 25.00
 }
 
-### Get all trips
-GET http://localhost:8080/api/trips
+### Create a Trip (Automatic Geocoding - No coordinates provided)
+POST http://localhost:8080/api/trips
+Content-Type: application/json
 Authorization: Bearer {{driver_token}}
+
+{
+  "tripType": "STUDENT_DRIVER",
+  "departureStop": "Bird Street, Gqeberha",
+  "departureLat": -33.9581,
+  "departureLng": 25.6011,
+  "destinationStop": "Summerstrand, Gqeberha",
+  "destinationLat": -33.9997,
+  "destinationLng": 25.6698,
+  "departureTime": "2026-07-01T14:00:00",
+  "availableSeats": 2,
+  "price": 30.00
+}
+
+### Get specific trip details (Verify Coordinates)
+GET http://localhost:8080/api/trips/1
+Authorization: Bearer {{student_token}}
+
+### Get all trips (Verify Coordinates)
+GET http://localhost:8080/api/trips
+Authorization: Bearer {{student_token}}
 
 ### Get trips by status
 GET http://localhost:8080/api/trips/status/CONFIRMED
-Authorization: Bearer {{driver_token}}
+Authorization: Bearer {{student_token}}
+
+### Search for a ride (Student search by address)
+GET http://localhost:8080/api/trips/search?departure=Bird Street&destination=Summerstrand
+Authorization: Bearer {{student_token}}
 
 ### Update trip status
 PATCH http://localhost:8080/api/trips/1/status?status=COMPLETED
