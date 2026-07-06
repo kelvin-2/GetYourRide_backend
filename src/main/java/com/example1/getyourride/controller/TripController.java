@@ -108,4 +108,37 @@ public class TripController {
     public ResponseEntity<TripResponse> scheduleTrip(@PathVariable Long id) {
         return ResponseEntity.ok(tripService.scheduleTrip(id));
     }
+
+    /**
+     * Search for trips by departure and destination stops.
+     * Can search by address name (string) or by specific coordinates (lat/lng).
+     * @param departure Departure stop address or keyword (optional if coordinates provided).
+     * @param destination Destination stop address or keyword (optional if coordinates provided).
+     * @param depLat Departure latitude (optional).
+     * @param depLng Departure longitude (optional).
+     * @param destLat Destination latitude (optional).
+     * @param destLng Destination longitude (optional).
+     * @param radius Radius in km for coordinate search (default 2km).
+     * @return List of matching trips.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<List<TripResponse>> searchTrips(
+            @RequestParam(required = false) String departure,
+            @RequestParam(required = false) String destination,
+            @RequestParam(required = false) Double depLat,
+            @RequestParam(required = false) Double depLng,
+            @RequestParam(required = false) Double destLat,
+            @RequestParam(required = false) Double destLng,
+            @RequestParam(defaultValue = "2.0") Double radius) {
+        
+        if (depLat != null && depLng != null && destLat != null && destLng != null) {
+            return ResponseEntity.ok(tripService.searchTripsByCoordinates(depLat, depLng, destLat, destLng, radius));
+        }
+        
+        if (departure != null && destination != null) {
+            return ResponseEntity.ok(tripService.searchTrips(departure, destination));
+        }
+
+        return ResponseEntity.badRequest().build();
+    }
 }

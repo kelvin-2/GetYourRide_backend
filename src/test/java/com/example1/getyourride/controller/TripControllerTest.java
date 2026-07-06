@@ -234,4 +234,26 @@ public class TripControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SCHEDULED"));
     }
+
+    @Test
+    @WithMockUser
+    public void testSearchTripsByCoordinates() throws Exception {
+        TripResponse tripResponse = TripResponse.builder()
+                .tripId(1L)
+                .status("SCHEDULED")
+                .build();
+
+        Mockito.when(tripService.searchTripsByCoordinates(
+                Mockito.anyDouble(), Mockito.anyDouble(), 
+                Mockito.anyDouble(), Mockito.anyDouble(), 
+                Mockito.anyDouble())).thenReturn(List.of(tripResponse));
+
+        mockMvc.perform(get("/api/trips/search")
+                        .param("depLat", "-33.9")
+                        .param("depLng", "25.6")
+                        .param("destLat", "-34.0")
+                        .param("destLng", "25.7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tripId").value(1L));
+    }
 }
