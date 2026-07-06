@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Request DTO for creating a new Trip.
@@ -39,4 +40,6 @@ public class CreateTripRequest {
 
     @NotNull(message = "Price is required")
     private BigDecimal price;
+
+    private List<TripStopRequest> stops;
 }

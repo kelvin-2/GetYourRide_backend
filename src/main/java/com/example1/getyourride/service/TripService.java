@@ -73,4 +73,15 @@ public interface TripService {
      * @return List of matching trips.
      */
     List<TripResponse> searchTrips(String departure, String destination);
+
+    /**
+     * Search for trips by departure and destination coordinates.
+     * @param depLat Departure latitude.
+     * @param depLng Departure longitude.
+     * @param destLat Destination latitude.
+     * @param destLng Destination longitude.
+     * @param radiusInKm Radius in kilometers to search within.
+     * @return List of matching trips.
+     */
+    List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm);
 }

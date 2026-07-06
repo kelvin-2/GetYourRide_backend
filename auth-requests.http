@@ -93,16 +93,16 @@ Content-Type: application/json
 Authorization: Bearer {{driver_token}}
 
 {
-  "tripType": "STUDENT_DRIVER",
-  "departureStop": "Main Campus, Gqeberha",
-  "destinationStop": "North Campus, Gqeberha",
-  "departureLat": -34.0012,
-  "departureLng": 25.6670,
-  "destinationLat": -33.9912,
-  "destinationLng": 25.6770,
-  "departureTime": "2026-07-01T12:00:00",
-  "availableSeats": 4,
-  "price": 25.00
+  "tripType": "Carpool",
+  "departureStop": "4GR72J96+C4 Walmer, Gqeberha",
+  "departureLat": -33.9814,
+  "departureLng": 25.6103,
+  "destinationStop": "4GR72M29+CX Summerstrand, Gqeberha",
+  "destinationLat": -33.9989,
+  "destinationLng": 25.6699,
+  "departureTime": "2026-07-01T14:00:00",
+  "availableSeats": 2,
+  "price": 30.00
 }
 
 ### Create a Trip (Automatic Geocoding - No coordinates provided)
@@ -111,7 +111,7 @@ Content-Type: application/json
 Authorization: Bearer {{driver_token}}
 
 {
-  "tripType": "STUDENT_DRIVER",
+  "tripType": "CarPool",
   "departureStop": "Bird Street, Gqeberha",
   "departureLat": -33.9581,
   "departureLng": 25.6011,
@@ -138,6 +138,43 @@ Authorization: Bearer {{student_token}}
 ### Search for a ride (Student search by address)
 GET http://localhost:8080/api/trips/search?departure=Bird Street&destination=Summerstrand
 Authorization: Bearer {{student_token}}
+
+### Search for a ride (Example: 15 Killanery Road to South Campus NMU)
+GET http://localhost:8080/api/trips/search?departure=15 Killanery Road&destination=south campus nmu
+Authorization: Bearer {{student_token}}
+
+### Search for a ride (Student search by coordinates)
+GET http://localhost:8080/api/trips/search?depLat=-33.9581&depLng=25.6011&destLat=-33.9997&destLng=25.6698&radius=5.0
+Authorization: Bearer {{student_token}}
+
+### Mock Data Test: Login as Alice (using mock data from DB)
+POST http://localhost:8080/api/auth/student/login
+Content-Type: application/json
+
+{
+  "email": "alice.j@example.edu",
+  "password": "hashed_pwd_1"
+}
+
+> {%
+    client.global.set("alice_token", response.body.token);
+%}
+
+### Mock Data Test: Search for Shuttle (North Campus to South Campus)
+GET http://localhost:8080/api/trips/search?departure=North Campus&destination=South Campus
+Authorization: Bearer {{alice_token}}
+
+### Mock Data Test: Search for Shuttle by Coordinates (North Campus Gate 1 area)
+GET http://localhost:8080/api/trips/search?depLat=-33.9912&depLng=25.6698&destLat=-33.9984&destLng=25.6750&radius=2.0
+Authorization: Bearer {{alice_token}}
+
+### Mock Data Test: Search for Private Trip (Summerstrand to Missionvale)
+GET http://localhost:8080/api/trips/search?departure=Summerstrand&destination=Missionvale
+Authorization: Bearer {{alice_token}}
+
+### Mock Data Test: Search for Private Trip by Coordinates (Student House A area)
+GET http://localhost:8080/api/trips/search?depLat=-34.0021&depLng=25.6601&destLat=-33.9100&destLng=25.5500&radius=2.0
+Authorization: Bearer {{alice_token}}
 
 ### Update trip status
 PATCH http://localhost:8080/api/trips/1/status?status=COMPLETED

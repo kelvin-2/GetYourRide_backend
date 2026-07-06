@@ -5,6 +5,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.List;
+
 /**
  * Response DTO for Trip details.
  */
@@ -33,4 +35,5 @@ public class TripResponse {
     private Integer availableSeats;
     private BigDecimal price;
     private String status;
+    private List<TripStopResponse> stops;
 }

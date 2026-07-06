@@ -8,6 +8,8 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "trip")
@@ -22,18 +24,16 @@ public class Trip {
     @Column(name = "trip_id")
     private Long tripId;
 
-    // fk_trip_driver
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", nullable = false)
     private Driver driver;
 
-    // fk_trip_vehicle
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_number", referencedColumnName = "registration_number", nullable = false)
     private Vehicle vehicle;
 
     @Column(name = "trip_type", nullable = false)
-    private String tripType; // e.g. "SHUTTLE" or "STUDENT_DRIVER"
+    private String tripType;
 
     @Column(name = "departure_stop", nullable = false)
     private String departureStop;
@@ -66,5 +66,21 @@ public class Trip {
     private BigDecimal price;
 
     @Column(name = "status", nullable = false)
-    private String status; // e.g. "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"
+    private String status;
+
+    // --- One-to-many side: a Trip can have many TripStops ---
+    @OneToMany(mappedBy = "trip", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("stopOrder ASC")
+    private List<TripStop> stops = new ArrayList<>();
+
+    // Convenience methods to keep both sides of the relationship in sync
+    public void addStop(TripStop stop) {
+        stops.add(stop);
+        stop.setTrip(this);
+    }
+
+    public void removeStop(TripStop stop) {
+        stops.remove(stop);
+        stop.setTrip(null);
+    }
 }

@@ -3,9 +3,8 @@ package com.example1.getyourride.service.impl;
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.dto.response.GeocodeResponse;
-import com.example1.getyourride.entity.Driver;
-import com.example1.getyourride.entity.Trip;
-import com.example1.getyourride.entity.Vehicle;
+import com.example1.getyourride.dto.response.TripStopResponse;
+import com.example1.getyourride.entity.*;
 import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.repository.DriverRepository;
@@ -93,6 +92,18 @@ public class TripServiceImpl implements TripService {
         trip.setAvailableSeats(request.getAvailableSeats());
         trip.setPrice(request.getPrice());
         trip.setStatus("CONFIRMED"); // Default status as requested
+
+        // Handle stops if provided
+        if (request.getStops() != null && !request.getStops().isEmpty()) {
+            request.getStops().forEach(stopRequest -> {
+                TripStop stop = new TripStop();
+                stop.setStopName(stopRequest.getStopName());
+                stop.setLatitude(stopRequest.getLatitude());
+                stop.setLongitude(stopRequest.getLongitude());
+                stop.setStopOrder(stopRequest.getStopOrder());
+                trip.addStop(stop);
+            });
+        }
 
         Trip savedTrip = tripRepository.save(trip);
         return mapToResponse(savedTrip);
@@ -196,8 +207,42 @@ public class TripServiceImpl implements TripService {
     @Override
     @Transactional(readOnly = true)
     public List<TripResponse> searchTrips(String departure, String destination) {
+        // First try to geocode the addresses to perform a coordinate-based search
+        GeocodeResponse depGeocode = geocodingService.geocode(departure);
+        GeocodeResponse destGeocode = geocodingService.geocode(destination);
+
+        if (depGeocode.isFound() && destGeocode.isFound()) {
+            return searchTripsByCoordinates(
+                    depGeocode.getLatitude(), depGeocode.getLongitude(),
+                    destGeocode.getLatitude(), destGeocode.getLongitude(),
+                    2.0 // Default radius
+            );
+        }
+
+        // Fallback to text-based search if geocoding fails
         return tripRepository.findByDepartureStopContainingIgnoreCaseAndDestinationStopContainingIgnoreCase(departure, destination)
                 .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm) {
+        // Degree to Km conversion (approximate)
+        // 1 degree of latitude is roughly 111km
+        // 1 degree of longitude at equator is 111km, but varies by latitude. 
+        // For Gqeberha (approx -34 lat), 1 degree lon is roughly 111 * cos(-34) = 92km.
+        double latRange = radiusInKm / 111.0;
+        double lngRange = radiusInKm / 92.0;
+
+        return tripRepository.findNearbyTrips(
+                depLat - latRange, depLat + latRange,
+                depLng - lngRange, depLng + lngRange,
+                destLat - latRange, destLat + latRange,
+                destLng - lngRange, destLng + lngRange,
+                "SCHEDULED"
+        ).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -231,6 +276,17 @@ public class TripServiceImpl implements TripService {
                 .availableSeats(trip.getAvailableSeats())
                 .price(trip.getPrice())
                 .status(trip.getStatus())
+                .stops(trip.getStops() != null ? trip.getStops().stream()
+                        .map(stop -> TripStopResponse.builder()
+                                .id(stop.getId())
+                                .stopName(stop.getStopName())
+                                .latitude(stop.getLatitude())
+                                .longitude(stop.getLongitude())
+                                .stopOrder(stop.getStopOrder())
+                                .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
+                                .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
+                                .build())
+                        .collect(Collectors.toList()) : null)
                 .build();
     }
 }
