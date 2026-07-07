@@ -1,5 +1,6 @@
 package com.example1.getyourride.service.impl;
 
+import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.dto.response.GeocodeResponse;
@@ -8,6 +9,7 @@ import com.example1.getyourride.entity.*;
 import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.repository.DriverRepository;
+import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import com.example1.getyourride.service.GeocodingService;
@@ -27,15 +29,18 @@ public class TripServiceImpl implements TripService {
 
     private final TripRepository tripRepository;
     private final DriverRepository driverRepository;
+    private final StudentRepository studentRepository;
     private final VehicleRepository vehicleRepository;
     private final GeocodingService geocodingService;
 
     public TripServiceImpl(TripRepository tripRepository, 
                            DriverRepository driverRepository, 
+                           StudentRepository studentRepository,
                            VehicleRepository vehicleRepository,
                            GeocodingService geocodingService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
+        this.studentRepository = studentRepository;
         this.vehicleRepository = vehicleRepository;
         this.geocodingService = geocodingService;
     }
@@ -104,6 +109,49 @@ public class TripServiceImpl implements TripService {
                 trip.addStop(stop);
             });
         }
+
+        Trip savedTrip = tripRepository.save(trip);
+        return mapToResponse(savedTrip);
+    }
+
+    @Override
+    @Transactional
+    public TripResponse bookCarpool(Long tripId, BookCarpoolRequest request) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+
+        if (trip.getAvailableSeats() <= 0) {
+            throw new BadRequestException("No available seats for this trip");
+        }
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Student student = studentRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found with email: " + email));
+
+        // Add pickup stop
+        TripStop pickupStop = new TripStop();
+        pickupStop.setTrip(trip);
+        pickupStop.setStudent(student);
+        pickupStop.setStopName(request.getPickupStop().getStopName());
+        pickupStop.setLatitude(request.getPickupStop().getLatitude());
+        pickupStop.setLongitude(request.getPickupStop().getLongitude());
+        pickupStop.setStopOrder(trip.getStops().size() + 1);
+        trip.addStop(pickupStop);
+
+        // Add drop-off stop if provided
+        if (request.getDropOffStop() != null) {
+            TripStop dropOffStop = new TripStop();
+            dropOffStop.setTrip(trip);
+            dropOffStop.setStudent(student);
+            dropOffStop.setStopName(request.getDropOffStop().getStopName());
+            dropOffStop.setLatitude(request.getDropOffStop().getLatitude());
+            dropOffStop.setLongitude(request.getDropOffStop().getLongitude());
+            dropOffStop.setStopOrder(trip.getStops().size() + 1);
+            trip.addStop(dropOffStop);
+        }
+
+        // Reduce available seats
+        trip.setAvailableSeats(trip.getAvailableSeats() - 1);
 
         Trip savedTrip = tripRepository.save(trip);
         return mapToResponse(savedTrip);

@@ -33,4 +33,14 @@ public class GeocodingController {
     public ResponseEntity<List<AddressSuggestion>> suggestions(@RequestParam("query") String query) {
         return ResponseEntity.ok(geocodingService.suggest(query));
     }
+
+    // Reverse: turns a GPS fix (Current Location) into a readable address,
+    // same AddressSuggestion shape as suggestions() so it saves as a stop
+    // exactly like any searched address does.
+    @GetMapping("/reverse")
+    public ResponseEntity<AddressSuggestion> reverse(
+            @RequestParam("lat") double lat,
+            @RequestParam("lon") double lon) {
+        return ResponseEntity.ok(geocodingService.reverseGeocode(lat, lon));
+    }
 }
