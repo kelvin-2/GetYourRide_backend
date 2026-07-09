@@ -1,5 +1,6 @@
 package com.example1.getyourride.controller;
 
+import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.service.TripService;
@@ -33,6 +34,18 @@ public class TripController {
     @PostMapping
     public ResponseEntity<TripResponse> createTrip(@Valid @RequestBody CreateTripRequest request) {
         return ResponseEntity.ok(tripService.createTrip(request));
+    }
+
+    /**
+     * Book a carpool trip.
+     * Called when the frontend fires "book carpool".
+     * @param tripId The trip ID.
+     * @param request The booking details (pickup/drop-off stops).
+     * @return The updated trip details.
+     */
+    @PostMapping("/{tripId}/book")
+    public ResponseEntity<TripResponse> bookCarpool(@PathVariable Long tripId, @Valid @RequestBody BookCarpoolRequest request) {
+        return ResponseEntity.ok(tripService.bookCarpool(tripId, request));
     }
 
     /**

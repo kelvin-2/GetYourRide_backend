@@ -1,5 +1,6 @@
 package com.example1.getyourride.service;
 
+import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.response.TripResponse;
 
@@ -16,6 +17,14 @@ public interface TripService {
      * @return The created trip details.
      */
     TripResponse createTrip(CreateTripRequest request);
+
+    /**
+     * Book a carpool trip for a student.
+     * @param tripId The ID of the trip to book.
+     * @param request Booking details including pickup and drop-off stops.
+     * @return The updated trip details.
+     */
+    TripResponse bookCarpool(Long tripId, BookCarpoolRequest request);
     
     /**
      * Gets details of a specific trip.
