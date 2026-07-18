@@ -33,8 +33,8 @@ public class TripServiceImpl implements TripService {
     private final VehicleRepository vehicleRepository;
     private final GeocodingService geocodingService;
 
-    public TripServiceImpl(TripRepository tripRepository, 
-                           DriverRepository driverRepository, 
+    public TripServiceImpl(TripRepository tripRepository,
+                           DriverRepository driverRepository,
                            StudentRepository studentRepository,
                            VehicleRepository vehicleRepository,
                            GeocodingService geocodingService) {
@@ -50,14 +50,14 @@ public class TripServiceImpl implements TripService {
     public TripResponse createTrip(CreateTripRequest request) {
         // Get authenticated driver email from SecurityContext
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        
+
         // Find driver by email
         Driver driver = driverRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
 
         // Get vehicles for the driver
         List<Vehicle> vehicles = vehicleRepository.findByDriverDriverId(driver.getDriverId());
-        
+
         // For simplicity, we use the first vehicle found for the driver if one exists.
         // We no longer strictly validate here as requested by user.
         Vehicle vehicle = vehicles.isEmpty() ? null : vehicles.get(0);
@@ -153,6 +153,12 @@ public class TripServiceImpl implements TripService {
         // Reduce available seats
         trip.setAvailableSeats(trip.getAvailableSeats() - 1);
 
+        // A confirmed booking means the trip is now scheduled.
+        // Set in the same transaction as the stop/seat update so a booking
+        // can never leave the trip in a state where a seat is taken and
+        // stops are saved, but the status hasn't caught up.
+        trip.setStatus("SCHEDULED");
+
         Trip savedTrip = tripRepository.save(trip);
         return mapToResponse(savedTrip);
     }
@@ -186,12 +192,12 @@ public class TripServiceImpl implements TripService {
     public TripResponse updateTripStatus(Long tripId, String status) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
-        
+
         trip.setStatus(status.toUpperCase()); // Normalize status to uppercase
         if ("COMPLETED".equalsIgnoreCase(status)) {
             trip.setArrivalTime(java.time.LocalDateTime.now());
         }
-        
+
         Trip updatedTrip = tripRepository.save(trip);
         return mapToResponse(updatedTrip);
     }
@@ -206,10 +212,10 @@ public class TripServiceImpl implements TripService {
         // Find the trip or throw exception
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
-        
+
         // Update status to CANCELLED
         trip.setStatus("CANCELLED");
-        
+
         // Save and return the updated trip
         return mapToResponse(tripRepository.save(trip));
     }
@@ -224,12 +230,12 @@ public class TripServiceImpl implements TripService {
         // Find the trip or throw exception
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
-        
+
         // Update status to COMPLETED
         trip.setStatus("COMPLETED");
         // Record arrival time
         trip.setArrivalTime(java.time.LocalDateTime.now());
-        
+
         // Save and return the updated trip
         return mapToResponse(tripRepository.save(trip));
     }
@@ -240,14 +246,14 @@ public class TripServiceImpl implements TripService {
      */
     @Override
     @Transactional
-    public TripResponse scheduleTrip(Long tripId) {
+    public TripResponse scheduleTrip(Long tripId) { 
         // Find the trip or throw exception
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
-        
+
         // Update status to SCHEDULED
         trip.setStatus("SCHEDULED");
-        
+
         // Save and return the updated trip
         return mapToResponse(tripRepository.save(trip));
     }
@@ -279,18 +285,18 @@ public class TripServiceImpl implements TripService {
     public List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm) {
         // Degree to Km conversion (approximate)
         // 1 degree of latitude is roughly 111km
-        // 1 degree of longitude at equator is 111km, but varies by latitude. 
+        // 1 degree of longitude at equator is 111km, but varies by latitude.
         // For Gqeberha (approx -34 lat), 1 degree lon is roughly 111 * cos(-34) = 92km.
         double latRange = radiusInKm / 111.0;
         double lngRange = radiusInKm / 92.0;
 
         return tripRepository.findNearbyTrips(
-                depLat - latRange, depLat + latRange,
-                depLng - lngRange, depLng + lngRange,
-                destLat - latRange, destLat + latRange,
-                destLng - lngRange, destLng + lngRange,
-                "SCHEDULED"
-        ).stream()
+                        depLat - latRange, depLat + latRange,
+                        depLng - lngRange, depLng + lngRange,
+                        destLat - latRange, destLat + latRange,
+                        destLng - lngRange, destLng + lngRange,
+                        "SCHEDULED"
+                ).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -325,16 +331,16 @@ public class TripServiceImpl implements TripService {
                 .price(trip.getPrice())
                 .status(trip.getStatus())
                 .stops(trip.getStops() != null ? trip.getStops().stream()
-                        .map(stop -> TripStopResponse.builder()
-                                .id(stop.getId())
-                                .stopName(stop.getStopName())
-                                .latitude(stop.getLatitude())
-                                .longitude(stop.getLongitude())
-                                .stopOrder(stop.getStopOrder())
-                                .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
-                                .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
-                                .build())
-                        .collect(Collectors.toList()) : null)
+                                                 .map(stop -> TripStopResponse.builder()
+                                                              .id(stop.getId())
+                                                              .stopName(stop.getStopName())
+                                                              .latitude(stop.getLatitude())
+                                                              .longitude(stop.getLongitude())
+                                                              .stopOrder(stop.getStopOrder())
+                                                              .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
+                                                              .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
+                                                              .build())
+                                                 .collect(Collectors.toList()) : null)
                 .build();
     }
 }

@@ -40,7 +40,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
         student.setEmail(request.getEmail());
         student.setPhone(request.getPhone());
         student.setPassword(request.getPassword()); // plain text, by project decision
-        student.setIsFunded(false); // default until verified/funded elsewhere
+        student.setIsFunded(request.getIsFunded());
 
         Student saved = studentRepository.save(student);
         return buildAuthResponse(saved);
