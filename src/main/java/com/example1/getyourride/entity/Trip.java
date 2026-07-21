@@ -83,4 +83,5 @@ public class Trip {
         stops.remove(stop);
         stop.setTrip(null);
     }
+
 }
