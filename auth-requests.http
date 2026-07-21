@@ -179,3 +179,12 @@ Authorization: Bearer {{alice_token}}
 ### Update trip status
 PATCH http://localhost:8080/api/trips/1/status?status=COMPLETED
 Authorization: Bearer {{driver_token}}
+
+
+### Get all shuttle stops (student, authenticated)
+GET http://localhost:8080/api/shuttle-stops
+Authorization: Bearer {{student_token}}
+
+### Get all shuttle time slots (student, authenticated)
+GET http://localhost:8080/api/shuttle-stops/time-slots
+Authorization: Bearer {{student_token}}
