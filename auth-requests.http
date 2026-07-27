@@ -183,7 +183,7 @@ Authorization: Bearer {{driver_token}}
 
 ### Get all shuttle stops (student, authenticated)
 GET http://localhost:8080/api/shuttle-stops
-Authorization: Bearer {{student_token}}
+Authorization: Bearer {{alice_token}}
 
 ### Get all shuttle time slots (student, authenticated)
 GET http://localhost:8080/api/shuttle-stops/time-slots
