@@ -163,7 +163,6 @@ Content-Type: application/json
 ### Mock Data Test: Search for Shuttle (North Campus to South Campus)
 GET http://localhost:8080/api/trips/search?departure=North Campus&destination=South Campus
 Authorization: Bearer {{alice_token}}
-
 ### Mock Data Test: Search for Shuttle by Coordinates (North Campus Gate 1 area)
 GET http://localhost:8080/api/trips/search?depLat=-33.9912&depLng=25.6698&destLat=-33.9984&destLng=25.6750&radius=2.0
 Authorization: Bearer {{alice_token}}
