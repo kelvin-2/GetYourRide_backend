@@ -51,6 +51,12 @@ public class StudentAuthServiceImpl implements StudentAuthService {
         Student student = studentRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
+        // Add these lines
+        System.out.println("ID: " + student.getStudentId());
+        System.out.println("Student Number: " + student.getStudentNumber());
+        System.out.println("First Name: " + student.getFirstName());
+        System.out.println("Email: " + student.getEmail());
+
         if (!student.getPassword().equals(request.getPassword())) {
             throw new BadRequestException("Invalid email or password");
         }
@@ -74,6 +80,8 @@ public class StudentAuthServiceImpl implements StudentAuthService {
                 .email(student.getEmail())
                 .isFunded(student.getIsFunded())
                 .role("STUDENT")
+                .studentNumber(student.getStudentNumber())
+                .phone(student.getPhone())
                 .build();
     }
 }

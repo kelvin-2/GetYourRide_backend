@@ -14,6 +14,8 @@ public class AuthResponse {
     private String firstName;
     private String lastName;
     private String email;
+    private String studentNumber;
+    private String phone;
 
     // student-specific (null for drivers)
     private Boolean isFunded;
