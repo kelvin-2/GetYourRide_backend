@@ -1,134 +1,116 @@
 package com.example1.getyourride.controller;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.*;
+import com.example1.getyourride.dto.response.AuthResponse;
+
+import com.example1.getyourride.dto.request.DriverApplicationRequest;
+
+import com.example1.getyourride.dto.response.DriverApplicationResponse;
+
+import com.example1.getyourride.service.DriverApplicationService;
+
+import org.springframework.http.ResponseEntity;
+
+import org.springframework.web.bind.annotation.*;
+
+import org.springframework.web.multipart.MultipartFile;
 
 
 
-@Entity
+@RestController
 
-@Table(name = "driverapplications")
+@RequestMapping("/api/driver-applications")
 public class DriverApplicationController {
-    @Id
+    private final DriverApplicationService service;
 
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
 
-    @Column(name = "ApplicationID")
 
-    private Long applicationId;
+    public DriverApplicationController(DriverApplicationService service) {
 
+        this.service = service;
 
+    }
 
-    @Column(name = "UserID", nullable = false)
 
-    private Long userId;
 
+    /**
 
+     * Phase 1: Submit application (personal + vehicle info).
 
-    @Column(name = "ContactNumber", nullable = false)
+     * POST /api/driver-applications
 
-    private String contactNumber;
+     */
 
+    @PostMapping
 
+    public ResponseEntity<DriverApplicationResponse> submitApplication(
 
-    @Column(name = "VehicleMakeModel", nullable = false)
+            @RequestBody DriverApplicationRequest request
 
-    private String vehicleMakeModel;
+    ) {
 
+        DriverApplicationResponse response = service.submitApplication(request);
 
+        return ResponseEntity.ok(response);
 
-    @Column(name = "RegistrationNumber", nullable = false)
+    }
 
-    private String registrationNumber;
 
 
+    /**
 
-    @Column(name = "SeatingCapacity", nullable = false)
+     * Phase 2: Upload a document (driver's licence or vehicle registration).
 
-    private int seatingCapacity;
+     * POST /api/driver-applications/{applicationId}/documents
 
+     */
 
+    @PostMapping("/{applicationId}/documents")
 
-    @Column(name = "VehicleColor", nullable = false)
+    public ResponseEntity<Void> uploadDocument(
 
-    private String vehicleColor;
+            @PathVariable Long applicationId,
 
+            @RequestParam("documentType") String documentType,
 
+            @RequestParam("file") MultipartFile file
 
-    @Column(name = "LicenseImagePath", nullable = false)
+    ) {
 
-    private String licenseImagePath;
+        try {
 
+            service.uploadDocument(applicationId, documentType, file);
 
+            return ResponseEntity.ok().build();
 
-    @Column(name = "RegistrationFilePath", nullable = false)
+        } catch (Exception e) {
 
-    private String registrationFilePath;
+            return ResponseEntity.badRequest().build();
 
+        }
 
+    }
 
-    @Column(name = "ApplicationStatus")
 
-    private String applicationStatus = "Pending Review";
-     // Getters and Setters
 
-    public Long getApplicationId() { return applicationId; }
+    /**
 
-    public void setApplicationId(Long applicationId) { this.applicationId = applicationId; }
+     * Phase 3: Finalize — auto-login, returns JWT + student info + role=DRIVER_PENDING.
 
+     * POST /api/driver-applications/{applicationId}/finalize
 
+     */
 
-    public Long getUserId() { return userId; }
+    @PostMapping("/{applicationId}/finalize")
 
-    public void setUserId(Long userId) { this.userId = userId; }
+    public ResponseEntity<AuthResponse> finalizeApplication(
 
+            @PathVariable Long applicationId
 
+    ) {
 
-    public String getContactNumber() { return contactNumber; }
+        AuthResponse response = service.finalizeApplication(applicationId);
 
-    public void setContactNumber(String contactNumber) { this.contactNumber = contactNumber; }
+        return ResponseEntity.ok(response);
 
-
-
-    public String getVehicleMakeModel() { return vehicleMakeModel; }
-
-    public void setVehicleMakeModel(String vehicleMakeModel) { this.vehicleMakeModel = vehicleMakeModel; }
-
-
-
-    public String getRegistrationNumber() { return registrationNumber; }
-
-    public void setRegistrationNumber(String registrationNumber) { this.registrationNumber = registrationNumber; }
-
-
-
-    public int getSeatingCapacity() { return seatingCapacity; }
-
-    public void setSeatingCapacity(int seatingCapacity) { this.seatingCapacity = seatingCapacity; }
-
-
-
-    public String getVehicleColor() { return vehicleColor; }
-
-    public void setVehicleColor(String vehicleColor) { this.vehicleColor = vehicleColor; }
-
-
-
-    public String getLicenseImagePath() { return licenseImagePath; }
-
-    public void setLicenseImagePath(String licenseImagePath) { this.licenseImagePath = licenseImagePath; }
-
-
-
-    public String getRegistrationFilePath() { return registrationFilePath; }
-
-    public void setRegistrationFilePath(String registrationFilePath) { this.registrationFilePath = registrationFilePath; }
-
-
-
-    public String getApplicationStatus() { return applicationStatus; }
-
-    public void setApplicationStatus(String applicationStatus) { this.applicationStatus = applicationStatus; }
+    }
 }
