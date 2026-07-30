@@ -7,6 +7,10 @@ import com.example1.getyourride.service.TripService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example1.getyourride.dto.request.OfferRideRequest;
+import com.example1.getyourride.dto.response.OfferRideResponse;
+import org.springframework.security.core.Authentication;
+
 
 import java.util.List;
 
@@ -154,4 +158,26 @@ public class TripController {
 
         return ResponseEntity.badRequest().build();
     }
+    /**
+     * POST /api/trips/offer
+     * Allows a verified student driver to post a carpool ride.
+     */
+    @PostMapping("/offer")
+    public ResponseEntity<OfferRideResponse> offerRide(
+            @RequestBody OfferRideRequest request,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        OfferRideResponse response = tripService.offerRide(email, request);
+        return ResponseEntity.ok(response);
+    }
+    /**
+ * GET /api/trips/my-trips
+ * Fetches all trips created by the currently authenticated driver.
+ */
+@GetMapping("/my-trips")
+public ResponseEntity<List<TripResponse>> getMyTrips(Authentication authentication) {
+    String email = authentication.getName();
+    return ResponseEntity.ok(tripService.getMyTrips(email));
+}
 }

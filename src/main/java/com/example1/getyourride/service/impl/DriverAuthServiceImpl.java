@@ -4,64 +4,108 @@ import com.example1.getyourride.dto.request.DriverLoginRequest;
 import com.example1.getyourride.dto.request.DriverRegisterRequest;
 import com.example1.getyourride.dto.response.AuthResponse;
 import com.example1.getyourride.entity.Driver;
-import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.security.JwtUtil;
 import com.example1.getyourride.service.DriverAuthService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
+import java.time.LocalDate;
 import java.util.Map;
 
+/**
+ * Implementation of {@link DriverAuthService} managing driver accounts and auth tokens.
+ */
 @Service
 public class DriverAuthServiceImpl implements DriverAuthService {
 
-    private final DriverRepository driverRepository;
+    private final DriverRepository driverRepo;
+    private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
-    public DriverAuthServiceImpl(DriverRepository driverRepository, JwtUtil jwtUtil) {
-        this.driverRepository = driverRepository;
+    public DriverAuthServiceImpl(
+            DriverRepository driverRepo,
+            PasswordEncoder passwordEncoder,
+            JwtUtil jwtUtil
+    ) {
+        this.driverRepo = driverRepo;
+        this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
     }
 
+    /**
+     * Registers a new driver directly.
+     */
     @Override
+    @Transactional
     public AuthResponse register(DriverRegisterRequest request) {
-        if (driverRepository.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Email already registered");
+        // Check if email is already taken
+        if (driverRepo.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalStateException("Email is already registered as a driver.");
         }
 
-        Driver driver = new Driver();
-        driver.setFirstName(request.getFirstName());
-        driver.setLastName(request.getLastName());
-        driver.setEmail(request.getEmail());
-        driver.setPhone(request.getPhone());
-        driver.setPassword(request.getPassword()); // plain text, by project decision
-        driver.setRole(request.getRole());
-        driver.setIsVerified(false);
-        driver.setTotalTrips(0);
+        // Build & save driver entity
+        Driver driver = Driver.builder()
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .role("STUDENT_DRIVER")
+                .isVerified(false)
+                .joinDate(LocalDate.now())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .totalTrips(0)
+                .build();
 
-        Driver saved = driverRepository.save(driver);
-        return buildAuthResponse(saved);
+        Driver savedDriver = driverRepo.save(driver);
+
+        // Generate JWT token with DRIVER_PENDING status
+        String token = jwtUtil.generateToken(
+                savedDriver.getDriverId(),
+                savedDriver.getEmail(),
+                "DRIVER",
+                Map.of("role", "DRIVER_PENDING")
+        );
+
+        return AuthResponse.builder()
+                .token(token)
+                .type("DRIVER")
+                .id(savedDriver.getDriverId())
+                .firstName(savedDriver.getFirstName())
+                .lastName(savedDriver.getLastName())
+                .email(savedDriver.getEmail())
+                .isFunded(null)
+                .role("DRIVER_PENDING")
+                .isVerified(false)
+                .build();
     }
 
+    /**
+     * Authenticates a driver directly via driver-specific login endpoint.
+     */
     @Override
+    @Transactional(readOnly = true)
     public AuthResponse login(DriverLoginRequest request) {
-        Driver driver = driverRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadRequestException("Invalid email or password"));
+        Driver driver = driverRepo.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("Driver account does not exist."));
 
-        if (!driver.getPassword().equals(request.getPassword())) {
-            throw new BadRequestException("Invalid email or password");
+        // Validate password
+        if (!passwordEncoder.matches(request.getPassword(), driver.getPassword())) {
+            throw new IllegalArgumentException("Invalid email or password.");
         }
 
-        return buildAuthResponse(driver);
-    }
+        // Null-safe boolean verification check
+        boolean isVerified = Boolean.TRUE.equals(driver.getIsVerified());
+        String role = isVerified ? "DRIVER_APPROVED" : "DRIVER_PENDING";
 
-    private AuthResponse buildAuthResponse(Driver driver) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("role", driver.getRole());
-        claims.put("isVerified", driver.getIsVerified());
-
-        String token = jwtUtil.generateToken(driver.getDriverId(), driver.getEmail(), "DRIVER", claims);
+        // Generate JWT token
+        String token = jwtUtil.generateToken(
+                driver.getDriverId(),
+                driver.getEmail(),
+                "DRIVER",
+                Map.of("role", role)
+        );
 
         return AuthResponse.builder()
                 .token(token)
@@ -70,8 +114,9 @@ public class DriverAuthServiceImpl implements DriverAuthService {
                 .firstName(driver.getFirstName())
                 .lastName(driver.getLastName())
                 .email(driver.getEmail())
-                .role(driver.getRole())
-                .isVerified(driver.getIsVerified())
+                .isFunded(null)
+                .role(role)
+                .isVerified(isVerified)
                 .build();
     }
 }

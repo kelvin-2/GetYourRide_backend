@@ -2,6 +2,8 @@ package com.example1.getyourride.service.impl;
 
 import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
+import com.example1.getyourride.dto.request.OfferRideRequest;
+import com.example1.getyourride.dto.response.OfferRideResponse;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.dto.response.GeocodeResponse;
 import com.example1.getyourride.dto.response.TripStopResponse;
@@ -18,6 +20,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,22 +53,70 @@ public class TripServiceImpl implements TripService {
 
     @Override
     @Transactional
-    public TripResponse createTrip(CreateTripRequest request) {
-        // Get authenticated driver email from SecurityContext
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-
-        // Find driver by email
+    public OfferRideResponse offerRide(String email, OfferRideRequest request) {
+        // 1. Fetch driver entity by email
         Driver driver = driverRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
 
-        // Get vehicles for the driver
-        List<Vehicle> vehicles = vehicleRepository.findByDriverDriverId(driver.getDriverId());
+        // 2. Strict backend verification check
+        if (!Boolean.TRUE.equals(driver.getIsVerified())) {
+            throw new BadRequestException("Your account is not yet verified. Please wait for administrator approval.");
+        }
 
-        // For simplicity, we use the first vehicle found for the driver if one exists.
-        // We no longer strictly validate here as requested by user.
+        // 3. Obtain driver's registered vehicle
+        List<Vehicle> vehicles = vehicleRepository.findByDriverDriverId(driver.getDriverId());
+        if (vehicles.isEmpty()) {
+            throw new BadRequestException("No vehicle linked to driver profile.");
+        }
+        Vehicle vehicle = vehicles.get(0);
+
+        // 4. Parse departure date and time
+        LocalDateTime departureTime;
+        try {
+            LocalDate date = LocalDate.parse(request.getRideDate());
+            LocalTime time = LocalTime.parse(request.getRideTime());
+            departureTime = LocalDateTime.of(date, time);
+        } catch (Exception e) {
+            throw new BadRequestException("Invalid date or time format provided.");
+        }
+
+        // 5. Prevent posting trips in the past
+        if (departureTime.isBefore(LocalDateTime.now().plusMinutes(15))) {
+            throw new BadRequestException("Departure time must be scheduled at least 15 minutes in advance.");
+        }
+
+        // 6. Build and save trip record using entity references
+        Trip trip = new Trip();
+        trip.setDriver(driver);
+        trip.setVehicle(vehicle);
+        trip.setTripType("Carpool");
+        trip.setDepartureStop(request.getPickupLocation());
+        trip.setDestinationStop(request.getDestination());
+        trip.setDepartureTime(departureTime);
+        trip.setAvailableSeats(request.getAvailableSeats());
+        trip.setPrice(BigDecimal.valueOf(request.getFarePerSeat()));
+        trip.setStatus("SCHEDULED");
+        trip.setDepartureLat(request.getPickupLat());
+        trip.setDepartureLng(request.getPickupLng());
+        trip.setDestinationLat(request.getDestinationLat());
+        trip.setDestinationLng(request.getDestinationLng());
+
+        Trip savedTrip = tripRepository.save(trip);
+
+        return new OfferRideResponse(savedTrip.getTripId(), "Ride posted successfully!");
+    }
+
+    @Override
+    @Transactional
+    public TripResponse createTrip(CreateTripRequest request) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        Driver driver = driverRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
+
+        List<Vehicle> vehicles = vehicleRepository.findByDriverDriverId(driver.getDriverId());
         Vehicle vehicle = vehicles.isEmpty() ? null : vehicles.get(0);
 
-        // Create new Trip entity
         Trip trip = new Trip();
         trip.setDriver(driver);
         trip.setVehicle(vehicle);
@@ -70,7 +124,6 @@ public class TripServiceImpl implements TripService {
         trip.setDepartureStop(request.getDepartureStop());
         trip.setDestinationStop(request.getDestinationStop());
 
-        // Handle coordinates - either from request or by geocoding the addresses
         if (request.getDepartureLat() != null && request.getDepartureLng() != null) {
             trip.setDepartureLat(request.getDepartureLat());
             trip.setDepartureLng(request.getDepartureLng());
@@ -96,9 +149,8 @@ public class TripServiceImpl implements TripService {
         trip.setDepartureTime(request.getDepartureTime());
         trip.setAvailableSeats(request.getAvailableSeats());
         trip.setPrice(request.getPrice());
-        trip.setStatus("CONFIRMED"); // Default status as requested
+        trip.setStatus("CONFIRMED");
 
-        // Handle stops if provided
         if (request.getStops() != null && !request.getStops().isEmpty()) {
             request.getStops().forEach(stopRequest -> {
                 TripStop stop = new TripStop();
@@ -128,7 +180,6 @@ public class TripServiceImpl implements TripService {
         Student student = studentRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with email: " + email));
 
-        // Add pickup stop
         TripStop pickupStop = new TripStop();
         pickupStop.setTrip(trip);
         pickupStop.setStudent(student);
@@ -138,7 +189,6 @@ public class TripServiceImpl implements TripService {
         pickupStop.setStopOrder(trip.getStops().size() + 1);
         trip.addStop(pickupStop);
 
-        // Add drop-off stop if provided
         if (request.getDropOffStop() != null) {
             TripStop dropOffStop = new TripStop();
             dropOffStop.setTrip(trip);
@@ -150,13 +200,7 @@ public class TripServiceImpl implements TripService {
             trip.addStop(dropOffStop);
         }
 
-        // Reduce available seats
         trip.setAvailableSeats(trip.getAvailableSeats() - 1);
-
-        // A confirmed booking means the trip is now scheduled.
-        // Set in the same transaction as the stop/seat update so a booking
-        // can never leave the trip in a state where a seat is taken and
-        // stops are saved, but the status hasn't caught up.
         trip.setStatus("SCHEDULED");
 
         Trip savedTrip = tripRepository.save(trip);
@@ -193,7 +237,7 @@ public class TripServiceImpl implements TripService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
-        trip.setStatus(status.toUpperCase()); // Normalize status to uppercase
+        trip.setStatus(status.toUpperCase());
         if ("COMPLETED".equalsIgnoreCase(status)) {
             trip.setArrivalTime(java.time.LocalDateTime.now());
         }
@@ -202,66 +246,40 @@ public class TripServiceImpl implements TripService {
         return mapToResponse(updatedTrip);
     }
 
-    /**
-     * Cancels a trip.
-     * Sets the status to CANCELLED.
-     */
     @Override
     @Transactional
     public TripResponse cancelTrip(Long tripId) {
-        // Find the trip or throw exception
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
-        // Update status to CANCELLED
         trip.setStatus("CANCELLED");
-
-        // Save and return the updated trip
         return mapToResponse(tripRepository.save(trip));
     }
 
-    /**
-     * Completes a trip.
-     * Sets the status to COMPLETED and records the current time as arrival time.
-     */
     @Override
     @Transactional
     public TripResponse completeTrip(Long tripId) {
-        // Find the trip or throw exception
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
-        // Update status to COMPLETED
         trip.setStatus("COMPLETED");
-        // Record arrival time
         trip.setArrivalTime(java.time.LocalDateTime.now());
-
-        // Save and return the updated trip
         return mapToResponse(tripRepository.save(trip));
     }
 
-    /**
-     * Schedules a trip.
-     * Sets the status to SCHEDULED.
-     */
     @Override
     @Transactional
-    public TripResponse scheduleTrip(Long tripId) { 
-        // Find the trip or throw exception
+    public TripResponse scheduleTrip(Long tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
-        // Update status to SCHEDULED
         trip.setStatus("SCHEDULED");
-
-        // Save and return the updated trip
         return mapToResponse(tripRepository.save(trip));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TripResponse> searchTrips(String departure, String destination) {
-        // First try to geocode the addresses to perform a coordinate-based search
         GeocodeResponse depGeocode = geocodingService.geocode(departure);
         GeocodeResponse destGeocode = geocodingService.geocode(destination);
 
@@ -269,11 +287,10 @@ public class TripServiceImpl implements TripService {
             return searchTripsByCoordinates(
                     depGeocode.getLatitude(), depGeocode.getLongitude(),
                     destGeocode.getLatitude(), destGeocode.getLongitude(),
-                    2.0 // Default radius
+                    2.0
             );
         }
 
-        // Fallback to text-based search if geocoding fails
         return tripRepository.findByDepartureStopContainingIgnoreCaseAndDestinationStopContainingIgnoreCase(departure, destination)
                 .stream()
                 .map(this::mapToResponse)
@@ -283,10 +300,6 @@ public class TripServiceImpl implements TripService {
     @Override
     @Transactional(readOnly = true)
     public List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm) {
-        // Degree to Km conversion (approximate)
-        // 1 degree of latitude is roughly 111km
-        // 1 degree of longitude at equator is 111km, but varies by latitude.
-        // For Gqeberha (approx -34 lat), 1 degree lon is roughly 111 * cos(-34) = 92km.
         double latRange = radiusInKm / 111.0;
         double lngRange = radiusInKm / 92.0;
 
@@ -301,9 +314,6 @@ public class TripServiceImpl implements TripService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Helper method to map Trip entity to TripResponse DTO.
-     */
     private TripResponse mapToResponse(Trip trip) {
         TripResponse.TripResponseBuilder builder = TripResponse.builder()
                 .tripId(trip.getTripId())
@@ -331,16 +341,27 @@ public class TripServiceImpl implements TripService {
                 .price(trip.getPrice())
                 .status(trip.getStatus())
                 .stops(trip.getStops() != null ? trip.getStops().stream()
-                                                 .map(stop -> TripStopResponse.builder()
-                                                              .id(stop.getId())
-                                                              .stopName(stop.getStopName())
-                                                              .latitude(stop.getLatitude())
-                                                              .longitude(stop.getLongitude())
-                                                              .stopOrder(stop.getStopOrder())
-                                                              .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
-                                                              .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
-                                                              .build())
-                                                 .collect(Collectors.toList()) : null)
+                        .map(stop -> TripStopResponse.builder()
+                                .id(stop.getId())
+                                .stopName(stop.getStopName())
+                                .latitude(stop.getLatitude())
+                                .longitude(stop.getLongitude())
+                                .stopOrder(stop.getStopOrder())
+                                .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
+                                .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
+                                .build())
+                        .collect(Collectors.toList()) : null)
                 .build();
     }
+    @Override
+@Transactional(readOnly = true)
+public List<TripResponse> getMyTrips(String email) {
+    Driver driver = driverRepository.findByEmail(email)
+            .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
+
+    List<Trip> trips = tripRepository.findByDriverDriverIdOrderByDepartureTimeDesc(driver.getDriverId());
+    return trips.stream()
+            .map(this::mapToResponse)
+            .collect(Collectors.toList());
+}
 }

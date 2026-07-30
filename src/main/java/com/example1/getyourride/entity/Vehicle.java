@@ -1,17 +1,18 @@
 package com.example1.getyourride.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 
+/**
+ * Entity mapping for the 'vehicle' table in MySQL shuttle_db.
+ */
 @Entity
 @Table(name = "vehicle")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Vehicle {
 
     @Id
@@ -19,6 +20,7 @@ public class Vehicle {
     @Column(name = "vehicle_id")
     private Long vehicleId;
 
+    // FK relationship mapping to Driver entity
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", nullable = false)
     private Driver driver;
@@ -35,6 +37,6 @@ public class Vehicle {
     @Column(name = "colour")
     private String colour;
 
-    @Column(name = "capacity")
-    private Integer capacity;
+    @Column(name = "capacity", nullable = false)
+    private int capacity;
 }

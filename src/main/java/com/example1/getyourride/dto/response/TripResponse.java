@@ -35,5 +35,7 @@ public class TripResponse {
     private Integer availableSeats;
     private BigDecimal price;
     private String status;
+    private long studentId;
+    private String studentName;
     private List<TripStopResponse> stops;
 }
