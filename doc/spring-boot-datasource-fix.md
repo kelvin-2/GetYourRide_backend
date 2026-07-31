@@ -29,7 +29,7 @@ Spring Boot reads its config from the **compiled classpath** (`target\classes\ap
 ## Fix
 
 ```powershell
-cd "path\to\your\backend\project"
+cd "C:\Users\Dell\Documents\SpringPracs\GetYourRide>"
 .\mvnw.cmd clean compile
 ```
 

@@ -103,10 +103,37 @@ Each branch should be independently testable before merging to `main` — don't 
 - [ ] Confirm whether the JSON has `latitude`/`longitude` present and non-zero, or missing/zero at the point it leaves the client
 - [ ] If present but backend still stores 0,0 — bug is in `TripServiceImpl`/`TripStopServiceImpl`; if missing/zero on the client — bug is in the Android suggestion-picker state
 
+> These three are **blocked, not done**. They require running the Android client, which lives
+> in a separate repository. The backend-side instrumentation they depend on is in place: enable
+> `logging.level.com.example1.getyourride.service.impl=DEBUG` (commented line in
+> `application.properties`) and the received lat/lng is logged before persistence on all four
+> stop-writing paths. Whoever runs the client next can complete these without further backend work.
+
 **Acceptance Criteria:**
-- [ ] Submitting a stop/trip with missing or zero coordinates returns a `400` with a clear validation message, never a silent save
+- [x] Submitting a stop/trip with missing or zero coordinates returns a `400` with a clear validation message, never a silent save
 - [ ] Creating a trip via a real suggestion pick results in stored coordinates matching the suggestion, verified by direct DB query
-- [ ] `pytest`/equivalent backend test added covering the null-stop-in-list case that previously slipped through
+- [x] `pytest`/equivalent backend test added covering the null-stop-in-list case that previously slipped through
+
+**Status:** ⚠️ Backend complete, one criterion unverifiable in this environment.
+
+**Notes on deviations from the original plan:**
+- The 0,0 check is implemented as a reusable class-level Bean Validation constraint
+  (`validation/ValidCoordinates` + `CoordinatesValidator`) rather than inline field annotations,
+  because "is this pair of numbers a real place" is a property of the lat/lng combination and the
+  same rule has to hold on four separate write paths.
+- Scope was widened by one file beyond the written deliverables: `BookCarpoolRequest` also lacked
+  `@Valid` on its nested stops, so `POST /api/trips/{id}/book` was a second route to the same
+  silent 0,0 save. Fixing only `CreateTripRequest` would have left the bug reachable.
+- `GlobalExceptionHandler` now also reports non-field (global) validation errors. It previously
+  read only `getFieldErrors()`, so a class-level constraint violation would have produced a `400`
+  with an empty body — the same class of silent failure this phase exists to remove.
+- The second acceptance criterion cannot be verified here: it needs a reachable database, and
+  neither `localhost` MySQL nor the documented TiDB Cloud instance is available from this
+  environment. Manual steps to verify it are in the Phase 1 section of `doc/ARCHITECTURE.md`.
+- Tests are plain Bean Validation / `SpringValidatorAdapter` unit tests, not `@SpringBootTest`.
+  The existing `@SpringBootTest` classes (`TripControllerTest`, `GetYourRideApplicationTests`)
+  already fail without a live MySQL — 12 errors, unchanged by this phase — so a Spring-context
+  test would not have run. 27 new tests, all passing, no DB required.
 
 ---
 
@@ -220,7 +247,7 @@ Each branch should be independently testable before merging to `main` — don't 
 | Phase | Branch | Focus | Key Deliverable |
 |-------|--------|-------|------------------|
 | 0 | `step-0-db-cleanup` | Data integrity | Migration + tracking schema ✅ |
-| 1 | `step-1-validation-fixes` | Bug fix | Close the 0,0 coordinate bug |
+| 1 | `step-1-validation-fixes` | Bug fix | Close the 0,0 coordinate bug ⚠️ backend done, client trace outstanding |
 | 2 | `step-2-route-wiring` | Backend | Real-data `RouteController` + leg precompute |
 | 3 | `step-4-websocket` | Infra | STOMP endpoint + message contracts (backend only) |
 | 4 | `step-5-scheduler` | Backend | `@Scheduled` simulation engine |
