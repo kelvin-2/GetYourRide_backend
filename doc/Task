@@ -1,8 +1,12 @@
-# Tasks — GetYourRide Live Tracking Build Plan
+# Tasks — GetYourRide Backend Build Plan (Tracking + Simulation)
 
-This document outlines the phased build plan for adding live trip tracking + simulation to GetYourRide. Each phase maps to a git branch, lists deliverables, specifies what gets checked/tested, and defines acceptance criteria before moving to the next phase.
+This document covers **backend-only** work for GetYourRide_backend. Frontend/Android tracking UI is owned separately — see [`tasks-frontend.md`](tasks-frontend.md) for that scope, which is not part of this plan.
 
-> Backend repo: `kelvin-2/GetYourRide_backend`. Related docs: [`GetYourRide_Tracking_Documentation.md`](GetYourRide_Tracking_Documentation.md) for full API + architecture reference.
+Each phase maps to a git branch, lists deliverables, specifies what gets checked/tested, and defines acceptance criteria before moving to the next phase.
+
+> Backend repo: `kelvin-2/GetYourRide_backend`. Related docs: [`GetYourRide_Tracking_Documentation.md`](GetYourRide_Tracking_Documentation.md) for full API + architecture reference. For details on how Kiro's Spec workflow, steering files, hooks, and other IDE features work, see `docs/kiro-workflow.md` (create this alongside your steering files if it doesn't exist yet).
+
+**Scope note:** as of this plan, there is no WebSocket/STOMP infrastructure on either side — Phase 3 below builds the backend's STOMP endpoint and message contracts only. Wiring an Android STOMP client to consume it is frontend work, tracked separately.
 
 ## Branch Strategy
 
@@ -21,10 +25,8 @@ gitGraph
     commit id: "STOMP infra"
     branch step-5-scheduler
     commit id: "simulation engine"
-    branch step-6-android-tracking
-    commit id: "TrackingScreen"
-    branch step-7-polish
-    commit id: "UX + testing"
+    branch step-6-backend-hardening
+    commit id: "reconnect support + secrets"
 ```
 
 Each branch should be independently testable before merging to `main` — don't start a phase until the previous one's acceptance criteria are all checked.
@@ -43,6 +45,19 @@ Each branch should be independently testable before merging to `main` — don't 
 - `01_cleanup_and_simulation_schema.sql` — deduplicates trip 24's stops, fixes 0,0/nonsensical coordinates on trips 3, 6, 24, standardizes `trip.status` casing and locks it to an `ENUM`
 - New columns on `trip`: `current_lat`, `current_lng`, `current_leg_index`, `current_point_index`, `dwell_until`
 - New tables: `trip_leg_route`, `trip_location_history`
+
+**Kiro Features:**
+| Feature | How it's used |
+|---------|--------------|
+| Spec session | "Design a migration fixing duplicate/zero-coordinate stops and adding tracking columns" |
+| Steering files | Reference existing schema conventions (naming, `ENGINE=InnoDB`, charset) so generated SQL matches the rest of the schema |
+| Supervised mode | Review each `ALTER`/`CREATE TABLE` statement before running against real data — destructive migrations aren't autopilot territory |
+
+**Other Tools:**
+| Tool | Usage |
+|------|-------|
+| MySQL client | Run migration, verify with `SELECT` sanity checks |
+| Git | Commit migration script on its own branch before merging |
 
 **What to check first:**
 - [ ] Run the migration against a copy of the DB, not production data directly
@@ -70,6 +85,19 @@ Each branch should be independently testable before merging to `main` — don't 
 - Trace the Android submission flow for where the selected suggestion's lat/lng gets lost (state binding vs. async race vs. field-name mismatch)
 - Add a request/response log (temporary, dev-only) on `/api/trips` and `/api/trips/{id}/stops` to confirm the actual payload being sent
 
+**Kiro Features:**
+| Feature | How it's used |
+|---------|--------------|
+| Spec session | "Add cascading validation to CreateTripRequest.stops and reject 0,0 coordinates explicitly" |
+| Supervised mode | Review the validation annotation changes hunk-by-hunk — this is a correctness-critical fix, not boilerplate |
+| Hooks | `PostFileSave` on `*.java` → run a quick compile/test check so the fix doesn't silently break other request paths |
+
+**Other Tools:**
+| Tool | Usage |
+|------|-------|
+| Postman / curl | Reproduce the bug with a crafted request, confirm the 400 after the fix |
+| Git | Commit the validation fix separately from the request-logging (temporary/dev-only) change |
+
 **What to check first:**
 - [ ] Reproduce the bug locally: pick a suggestion in the app, submit, and log the exact outgoing JSON before it hits the backend
 - [ ] Confirm whether the JSON has `latitude`/`longitude` present and non-zero, or missing/zero at the point it leaves the client
@@ -92,6 +120,20 @@ Each branch should be independently testable before merging to `main` — don't 
 - `RouteController.getRoute()` pulls real `departure`/`destination` (or per-leg stop coordinates) from `TripRepository` instead of the hardcoded `-33.9581, 25.6014` / `-33.9615, 25.6089`
 - New service method: on trip creation (or on a dedicated `/trips/{id}/precompute-route` endpoint), loop `trip_stop` ordered by `stop_order`, call ORS once per consecutive pair, insert into `trip_leg_route`
 - Reuse the existing ORS client/`RouteService` rather than duplicating the integration
+
+**Kiro Features:**
+| Feature | How it's used |
+|---------|--------------|
+| Spec session | "Wire RouteController to real trip coordinates and precompute per-leg ORS routes on trip creation" |
+| Autopilot mode | Generate the leg-precompute loop boilerplate (iterate `trip_stop` pairs, call ORS, insert `trip_leg_route`) |
+| MCP (Postman) | Test ORS calls and the updated `RouteController` endpoint interactively during development |
+| Supervised mode | Review the `TripRepository` wiring carefully — this replaces a known placeholder, worth a close look |
+
+**Other Tools:**
+| Tool | Usage |
+|------|-------|
+| Postman | Manual verification against real trip IDs, including the previously-bad trips 3/6/24 |
+| Git | Commit route-wiring and leg-precompute as separate, reviewable changes |
 
 **What to check first:**
 - [ ] Confirm the ORS API key in `application.properties` is still valid and has quota (and flag it's still committed in plaintext — see security note in the tracking doc)
@@ -149,55 +191,27 @@ Each branch should be independently testable before merging to `main` — don't 
 
 ---
 
-## Phase 5 — Android `TrackingScreen`
+## Phase 5 — Backend Hardening
 
-**Branch:** `step-6-android-tracking`
+**Branch:** `step-6-backend-hardening`
 
-**Objective:** Build the OSMDroid map screen with smooth marker animation, dual polyline, stop markers, and the bottom-sheet info card.
-
-**Deliverables:**
-- CartoDB Positron tile source instead of default Mapnik
-- Custom shuttle marker (not default pin), animated via `ValueAnimator`/coroutine tween between STOMP updates
-- Dual polyline: solid traveled segment + dashed remaining segment
-- Stop markers with 3 visual states: passed / upcoming / current
-- `BottomSheetBehavior` panel: next stop, ETA, progress indicator, driver/vehicle info
-- STOMP subscription to `/topic/trip/{tripId}`, initial state fetched via REST on screen load
-
-**What to check first:**
-- [ ] Confirm OSMDroid + STOMP client dependencies are added to `build.gradle`
-- [ ] Test marker animation smoothness at the actual tick rate from Phase 4 (4s ticks) before wiring live data — a canned test sequence of coordinates is enough
-
-**Acceptance Criteria:**
-- [ ] Marker moves smoothly between updates, no snapping/jumping
-- [ ] Traveled/remaining polyline updates correctly as the trip progresses
-- [ ] Stop markers change state as `STOP_EVENT` messages arrive
-- [ ] Bottom sheet reflects real ETA/next-stop data, not placeholder text
-- [ ] Screen correctly reloads state (doesn't desync) if reopened mid-trip
-
----
-
-## Phase 6 — Polish + Testing
-
-**Branch:** `step-7-polish`
-
-**Objective:** Handle edge cases, connection loss, and general UX rough edges before calling tracking "done."
+**Objective:** Handle edge cases on the server side and close out the security gap before calling backend tracking support "done." No frontend work in this phase.
 
 **Deliverables:**
-- WebSocket reconnection handling (auto-retry, visible "reconnecting" state)
-- Fallback: if STOMP fails entirely, poll `GET /api/trips/{id}` on an interval instead
-- Recenter FAB button, camera-follow logic that doesn't fight the user's manual pan
-- Secrets moved out of `application.properties` into environment variables
-- End-to-end test: full simulated trip from start to completion, verified visually on device
+- Fallback support: `GET /api/trips/{id}` returns enough live state (`current_lat/lng`, `current_leg_index`, status) that a client can poll it if STOMP is unavailable — this endpoint should already work post-Phase 4, just verify it
+- Reasonable STOMP session handling so a dropped/reconnecting client doesn't leave orphaned state server-side
+- Secrets moved out of `application.properties` into environment variables (DB password, ORS key, Geoapify key)
+- Backend test suite covering: trip creation with valid/invalid stops, route precompute, one full simulated tick cycle via `pytest`/JUnit equivalent
 
 **What to check first:**
-- [ ] Kill the WebSocket connection mid-trip (airplane mode toggle) and confirm the app recovers without crashing
+- [ ] Confirm `GET /api/trips/{id}` already returns the tracking columns added in Phase 0 — if not, add them to `TripResponse`
 - [ ] Confirm database credentials/API keys are no longer visible in the committed `application.properties`
 
 **Acceptance Criteria:**
-- [ ] App recovers gracefully from a dropped connection
 - [ ] No secrets remain committed to the repo
-- [ ] A full simulated trip (multiple stops) runs start-to-finish without manual intervention
-- [ ] Map UI matches the agreed visual direction (clean markers, dual polyline, bottom sheet — see mockup)
+- [ ] `GET /api/trips/{id}` is a viable polling fallback on its own, independent of WebSocket
+- [ ] A full simulated trip (multiple stops) runs start-to-finish via API calls alone, verified with curl/Postman, no manual intervention
+- [ ] Test suite passes with reasonable coverage on the new tracking code paths
 
 ---
 
@@ -208,7 +222,8 @@ Each branch should be independently testable before merging to `main` — don't 
 | 0 | `step-0-db-cleanup` | Data integrity | Migration + tracking schema ✅ |
 | 1 | `step-1-validation-fixes` | Bug fix | Close the 0,0 coordinate bug |
 | 2 | `step-2-route-wiring` | Backend | Real-data `RouteController` + leg precompute |
-| 3 | `step-4-websocket` | Infra | STOMP endpoint + message contracts |
+| 3 | `step-4-websocket` | Infra | STOMP endpoint + message contracts (backend only) |
 | 4 | `step-5-scheduler` | Backend | `@Scheduled` simulation engine |
-| 5 | `step-6-android-tracking` | Frontend | `TrackingScreen` map + bottom sheet |
-| 6 | `step-7-polish` | Hardening | Reconnection, secrets, end-to-end test |
+| 5 | `step-6-backend-hardening` | Hardening | Polling fallback, secrets, test coverage |
+
+Frontend/Android tracking UI phases live in [`tasks-frontend.md`](tasks-frontend.md), owned separately.
