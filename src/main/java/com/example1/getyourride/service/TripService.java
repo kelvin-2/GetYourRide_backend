@@ -2,6 +2,8 @@ package com.example1.getyourride.service;
 
 import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
+import com.example1.getyourride.dto.request.OfferRideRequest;
+import com.example1.getyourride.dto.response.OfferRideResponse;
 import com.example1.getyourride.dto.response.TripResponse;
 
 import java.util.List;
@@ -10,7 +12,15 @@ import java.util.List;
  * Service interface for managing Trips.
  */
 public interface TripService {
-    
+
+    /**
+     * Creates a new carpool trip for an authenticated, verified student driver.
+     * @param email Driver's email extracted from JWT auth.
+     * @param request Form data provided by the driver.
+     * @return Confirmation response with created trip ID.
+     */
+    OfferRideResponse offerRide(String email, OfferRideRequest request);
+
     /**
      * Creates a new trip.
      * @param request Data for the new trip.
@@ -92,5 +102,7 @@ public interface TripService {
      * @param radiusInKm Radius in kilometers to search within.
      * @return List of matching trips.
      */
+    
     List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm);
+    List<TripResponse> getMyTrips(String email);
 }

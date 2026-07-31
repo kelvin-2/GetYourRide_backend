@@ -1,19 +1,20 @@
 package com.example1.getyourride.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 
+/**
+ * Entity mapping for the 'driver' table in MySQL shuttle_db.
+ */
 @Entity
 @Table(name = "driver")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Driver {
 
     @Id
@@ -32,24 +33,25 @@ public class Driver {
 
     @Column(name = "phone")
     private String phone;
-
-    @Column(name = "password", nullable = false)
-    private String password;
+    
+    @Column(name = "student_number")
+    private String studentNumber;
 
     @Column(name = "role", nullable = false)
-    private String role; // "STUDENT_DRIVER" or "SHUTTLE_DRIVER"
+    private String role;
 
+    // Kept as Boolean (wrapper) so Lombok generates getIsVerified() and setIsVerified()
+    @Builder.Default
     @Column(name = "is_verified", nullable = false)
     private Boolean isVerified = false;
-
-    @Column(name = "total_trips", nullable = false)
-    private Integer totalTrips = 0;
 
     @Column(name = "join_date")
     private LocalDate joinDate;
 
-    @PrePersist
-    protected void onCreate() {
-        this.joinDate = LocalDate.now();
-    }
+    @Column(name = "password", nullable = false)
+    private String password;
+
+    @Builder.Default
+    @Column(name = "total_trips", nullable = false)
+    private int totalTrips = 0;
 }

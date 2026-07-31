@@ -24,65 +24,66 @@ import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class DriverApplication {
-    @Id
 
-@GeneratedValue(strategy = GenerationType.IDENTITY)
+      @Id
 
-@Column(name = "ApplicationID")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
 
-private Long applicationId;
+    @Column(name = "ApplicationID")
 
-
-
-@Column(name = "student_id", nullable = false)
-
-private Long studentId;
+    private Long applicationId;
 
 
 
-@Column(name = "contact_number", nullable = false)
+    @Column(name = "driver_id", nullable = false)
 
-private String contactNumber;
-
-
-
-@Column(name = "vehicle_make_model", nullable = false)
-
-private String vehicleMakeModel;
+    private Long driverId;
 
 
 
-@Column(name = "registration_number", nullable = false)
+    @Column(name = "contact_number", nullable = false)
 
-private String registrationNumber;
-
-
-
-@Column(name = "seating_capacity", nullable = false)
-
-private int seatingCapacity;
+    private String contactNumber;
 
 
 
-@Column(name = "vehicle_color", nullable = false)
+    @Column(name = "vehicle_make_model", nullable = false)
 
-private String vehicleColor;
-
-
-
-@Column(name = "license_image_path", nullable = false)
-
-private String licenseImagePath = "";
+    private String vehicleMakeModel;
 
 
 
-@Column(name = "registration_file_path", nullable = false)
+    @Column(name = "registration_number", nullable = false)
 
-private String registrationFilePath = "";
+    private String registrationNumber;
 
 
 
-@Column(name = "application_status")
+    @Column(name = "seating_capacity", nullable = false)
 
-private String applicationStatus = "Pending Review";
+    private int seatingCapacity;
+
+
+
+    @Column(name = "vehicle_color", nullable = false)
+
+    private String vehicleColor;
+
+
+
+    @Column(name = "license_image_path", nullable = false)
+
+    private String licenseImagePath = "";
+
+
+
+    @Column(name = "registration_file_path", nullable = false)
+
+    private String registrationFilePath = "";
+
+
+
+    @Column(name = "application_status")
+
+    private String applicationStatus = "Pending Review";
 }

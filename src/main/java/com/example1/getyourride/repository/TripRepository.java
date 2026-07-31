@@ -18,6 +18,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @EntityGraph(attributePaths = {"driver", "vehicle"})
     List<Trip> findAll();
 
+    List<Trip> findByDriverDriverIdOrderByDepartureTimeDesc(Long driverId);
     @Override
     @EntityGraph(attributePaths = {"driver", "vehicle"})
     Optional<Trip> findById(Long id);
