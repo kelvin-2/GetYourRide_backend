@@ -1,0 +1,214 @@
+# Tasks — GetYourRide Live Tracking Build Plan
+
+This document outlines the phased build plan for adding live trip tracking + simulation to GetYourRide. Each phase maps to a git branch, lists deliverables, specifies what gets checked/tested, and defines acceptance criteria before moving to the next phase.
+
+> Backend repo: `kelvin-2/GetYourRide_backend`. Related docs: [`GetYourRide_Tracking_Documentation.md`](GetYourRide_Tracking_Documentation.md) for full API + architecture reference.
+
+## Branch Strategy
+
+```mermaid
+gitGraph
+    commit id: "main"
+    branch step-0-db-cleanup
+    commit id: "migration + fixes"
+    branch step-1-validation-fixes
+    commit id: "close the 0,0 bug"
+    branch step-2-route-wiring
+    commit id: "real coords in RouteController"
+    branch step-3-leg-precompute
+    commit id: "trip_leg_route population"
+    branch step-4-websocket
+    commit id: "STOMP infra"
+    branch step-5-scheduler
+    commit id: "simulation engine"
+    branch step-6-android-tracking
+    commit id: "TrackingScreen"
+    branch step-7-polish
+    commit id: "UX + testing"
+```
+
+Each branch should be independently testable before merging to `main` — don't start a phase until the previous one's acceptance criteria are all checked.
+
+---
+
+## Phase 0 — Database Cleanup & Tracking Schema
+
+**Branch:** `step-0-db-cleanup`
+
+**Status:** ✅ Done
+
+**Objective:** Fix existing data quality issues and add the schema needed for simulation.
+
+**Deliverables:**
+- `01_cleanup_and_simulation_schema.sql` — deduplicates trip 24's stops, fixes 0,0/nonsensical coordinates on trips 3, 6, 24, standardizes `trip.status` casing and locks it to an `ENUM`
+- New columns on `trip`: `current_lat`, `current_lng`, `current_leg_index`, `current_point_index`, `dwell_until`
+- New tables: `trip_leg_route`, `trip_location_history`
+
+**What to check first:**
+- [ ] Run the migration against a copy of the DB, not production data directly
+- [ ] `SELECT * FROM trip_stop WHERE latitude = 0 OR longitude = 0;` returns zero rows
+- [ ] `SELECT DISTINCT status FROM trip;` returns only the 5 enum values
+- [ ] `trip_leg_route` and `trip_location_history` exist with correct FKs to `trip`
+
+**Acceptance Criteria:**
+- [x] Migration runs clean with no FK errors
+- [x] No duplicate stops remain on any trip
+- [x] No stop has `0,0` coordinates
+- [x] `trip.status` is an ENUM
+
+---
+
+## Phase 1 — Close the Validation Gap (the 0,0 bug)
+
+**Branch:** `step-1-validation-fixes`
+
+**Objective:** Fix the confirmed backend bug that lets stops save with null/zero coordinates silently, then trace and fix the Android-side cause.
+
+**Deliverables:**
+- Add `@Valid` to `CreateTripRequest.stops` so nested `TripStopRequest` validation actually runs
+- Add a custom check rejecting `0.0, 0.0` explicitly (not just null) — a real address is never going to be off the coast of Africa
+- Trace the Android submission flow for where the selected suggestion's lat/lng gets lost (state binding vs. async race vs. field-name mismatch)
+- Add a request/response log (temporary, dev-only) on `/api/trips` and `/api/trips/{id}/stops` to confirm the actual payload being sent
+
+**What to check first:**
+- [ ] Reproduce the bug locally: pick a suggestion in the app, submit, and log the exact outgoing JSON before it hits the backend
+- [ ] Confirm whether the JSON has `latitude`/`longitude` present and non-zero, or missing/zero at the point it leaves the client
+- [ ] If present but backend still stores 0,0 — bug is in `TripServiceImpl`/`TripStopServiceImpl`; if missing/zero on the client — bug is in the Android suggestion-picker state
+
+**Acceptance Criteria:**
+- [ ] Submitting a stop/trip with missing or zero coordinates returns a `400` with a clear validation message, never a silent save
+- [ ] Creating a trip via a real suggestion pick results in stored coordinates matching the suggestion, verified by direct DB query
+- [ ] `pytest`/equivalent backend test added covering the null-stop-in-list case that previously slipped through
+
+---
+
+## Phase 2 — Fix `RouteController` + Leg Route Precomputation
+
+**Branch:** `step-2-route-wiring`
+
+**Objective:** Remove the hardcoded placeholder coordinates in `RouteController` and wire it to real trip data; build the leg-by-leg ORS precomputation that populates `trip_leg_route`.
+
+**Deliverables:**
+- `RouteController.getRoute()` pulls real `departure`/`destination` (or per-leg stop coordinates) from `TripRepository` instead of the hardcoded `-33.9581, 25.6014` / `-33.9615, 25.6089`
+- New service method: on trip creation (or on a dedicated `/trips/{id}/precompute-route` endpoint), loop `trip_stop` ordered by `stop_order`, call ORS once per consecutive pair, insert into `trip_leg_route`
+- Reuse the existing ORS client/`RouteService` rather than duplicating the integration
+
+**What to check first:**
+- [ ] Confirm the ORS API key in `application.properties` is still valid and has quota (and flag it's still committed in plaintext — see security note in the tracking doc)
+- [ ] Test `RouteController` against a real trip ID and confirm it returns a road-following polyline, not a straight line between placeholders
+
+**Acceptance Criteria:**
+- [ ] `GET /api/rides/{rideId}/route` returns geometry matching the trip's actual departure/destination
+- [ ] `trip_leg_route` has one row per consecutive stop pair for a fully-stopped trip
+- [ ] Legs with previously-bad coordinates (trips 3, 6, 24) now produce sane, short-distance polylines within Gqeberha
+
+---
+
+## Phase 3 — WebSocket / STOMP Infrastructure
+
+**Branch:** `step-4-websocket`
+
+**Objective:** Add the real-time transport layer that doesn't exist yet in the repo.
+
+**Deliverables:**
+- `WebSocketConfig` registering a STOMP endpoint (e.g. `/ws`) with a simple broker on `/topic`
+- `LocationUpdateDTO` and `StopEventDTO` message classes
+- A test publisher (manually triggered) to confirm messages reach a subscribed client before the scheduler exists
+
+**What to check first:**
+- [ ] Confirm Spring Boot has `spring-boot-starter-websocket` as a dependency (check `pom.xml`/`build.gradle`)
+- [ ] Test the endpoint with `wscat` or Postman's WebSocket support before writing any Android client code
+
+**Acceptance Criteria:**
+- [ ] A client can subscribe to `/topic/trip/{tripId}` and receive a manually-published test message
+- [ ] Message shapes match the documented JSON in `GetYourRide_Tracking_Documentation.md` §4.4
+
+---
+
+## Phase 4 — Scheduled Simulation Engine
+
+**Branch:** `step-5-scheduler`
+
+**Objective:** Build the `@Scheduled` ticker that walks active trips along their leg polylines and broadcasts position updates.
+
+**Deliverables:**
+- `TripSimulationService` with `@Scheduled(fixedRate = ...)` tick method
+- Leg-advance logic: walk `route_geometry`, update `trip.current_lat/lng`, insert `trip_location_history` row, publish `LOCATION_UPDATE`
+- Stop-arrival logic: mark `trip_stop.status = ARRIVED`, set `dwell_until`, publish `STOP_EVENT`, advance `current_leg_index`
+- Trip-completion logic: set `trip.status = COMPLETED` on reaching the final stop
+
+**What to check first:**
+- [ ] Pick one clean test trip (post-migration) and dry-run the tick logic with logging before enabling the `@Scheduled` annotation broadly
+- [ ] Verify `STEP_SIZE`/tick interval produces a reasonable simulated speed (not instant, not glacial) against a real leg distance
+
+**Acceptance Criteria:**
+- [ ] Starting a trip (`status = IN_PROGRESS`) causes visible position updates in `trip_location_history` every tick
+- [ ] Vehicle correctly pauses at `dwell_until` before advancing to the next leg
+- [ ] Trip reaches `COMPLETED` status after its final leg, not before
+- [ ] No two trips interfere with each other's `current_leg_index`/`current_point_index` state
+
+---
+
+## Phase 5 — Android `TrackingScreen`
+
+**Branch:** `step-6-android-tracking`
+
+**Objective:** Build the OSMDroid map screen with smooth marker animation, dual polyline, stop markers, and the bottom-sheet info card.
+
+**Deliverables:**
+- CartoDB Positron tile source instead of default Mapnik
+- Custom shuttle marker (not default pin), animated via `ValueAnimator`/coroutine tween between STOMP updates
+- Dual polyline: solid traveled segment + dashed remaining segment
+- Stop markers with 3 visual states: passed / upcoming / current
+- `BottomSheetBehavior` panel: next stop, ETA, progress indicator, driver/vehicle info
+- STOMP subscription to `/topic/trip/{tripId}`, initial state fetched via REST on screen load
+
+**What to check first:**
+- [ ] Confirm OSMDroid + STOMP client dependencies are added to `build.gradle`
+- [ ] Test marker animation smoothness at the actual tick rate from Phase 4 (4s ticks) before wiring live data — a canned test sequence of coordinates is enough
+
+**Acceptance Criteria:**
+- [ ] Marker moves smoothly between updates, no snapping/jumping
+- [ ] Traveled/remaining polyline updates correctly as the trip progresses
+- [ ] Stop markers change state as `STOP_EVENT` messages arrive
+- [ ] Bottom sheet reflects real ETA/next-stop data, not placeholder text
+- [ ] Screen correctly reloads state (doesn't desync) if reopened mid-trip
+
+---
+
+## Phase 6 — Polish + Testing
+
+**Branch:** `step-7-polish`
+
+**Objective:** Handle edge cases, connection loss, and general UX rough edges before calling tracking "done."
+
+**Deliverables:**
+- WebSocket reconnection handling (auto-retry, visible "reconnecting" state)
+- Fallback: if STOMP fails entirely, poll `GET /api/trips/{id}` on an interval instead
+- Recenter FAB button, camera-follow logic that doesn't fight the user's manual pan
+- Secrets moved out of `application.properties` into environment variables
+- End-to-end test: full simulated trip from start to completion, verified visually on device
+
+**What to check first:**
+- [ ] Kill the WebSocket connection mid-trip (airplane mode toggle) and confirm the app recovers without crashing
+- [ ] Confirm database credentials/API keys are no longer visible in the committed `application.properties`
+
+**Acceptance Criteria:**
+- [ ] App recovers gracefully from a dropped connection
+- [ ] No secrets remain committed to the repo
+- [ ] A full simulated trip (multiple stops) runs start-to-finish without manual intervention
+- [ ] Map UI matches the agreed visual direction (clean markers, dual polyline, bottom sheet — see mockup)
+
+---
+
+## Summary Table
+
+| Phase | Branch | Focus | Key Deliverable |
+|-------|--------|-------|------------------|
+| 0 | `step-0-db-cleanup` | Data integrity | Migration + tracking schema ✅ |
+| 1 | `step-1-validation-fixes` | Bug fix | Close the 0,0 coordinate bug |
+| 2 | `step-2-route-wiring` | Backend | Real-data `RouteController` + leg precompute |
+| 3 | `step-4-websocket` | Infra | STOMP endpoint + message contracts |
+| 4 | `step-5-scheduler` | Backend | `@Scheduled` simulation engine |
+| 5 | `step-6-android-tracking` | Frontend | `TrackingScreen` map + bottom sheet |
+| 6 | `step-7-polish` | Hardening | Reconnection, secrets, end-to-end test |
