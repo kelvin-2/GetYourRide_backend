@@ -37,6 +37,13 @@ public class AuthServiceImp {
         this.jwtUtil = jwtUtil;
     }
 
+    //TODO: complete logic for the student to be able to register 
+     @Transactional
+    public AuthResponse register(String email, String password, String firstName, String lastName) {
+        // Registration logic can be implemented here if needed
+        throw new UnsupportedOperationException("Registration is not implemented in this unified service.");
+    }
+
     /**
      * Unified Login: Checks Student table first. If absent, falls back to Driver table.
      *
@@ -44,6 +51,7 @@ public class AuthServiceImp {
      * @param password Raw plain text password.
      * @return AuthResponse containing JWT token, role, and user details.
      */
+   
     @Transactional(readOnly = true)
     public AuthResponse login(String email, String password) {
         

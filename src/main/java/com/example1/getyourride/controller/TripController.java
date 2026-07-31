@@ -3,6 +3,9 @@ package com.example1.getyourride.controller;
 import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.response.TripResponse;
+import com.example1.getyourride.entity.Student;
+import com.example1.getyourride.entity.Trip;
+import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.service.TripService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -10,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import com.example1.getyourride.dto.request.OfferRideRequest;
 import com.example1.getyourride.dto.response.OfferRideResponse;
 import org.springframework.security.core.Authentication;
-
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.List;
 
