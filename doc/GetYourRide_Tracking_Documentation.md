@@ -71,7 +71,22 @@ Security is JWT-based and stateless (`SessionCreationPolicy.STATELESS`). Only `/
 |---|---|---|
 | GET | `/api/rides/{rideId}/route` | `RouteResponse` — `{ coordinates: [[lat,lng], ...], distanceMeters, durationSeconds }` from OpenRouteService |
 
-> ⚠️ **Known gap:** `RouteController` currently uses **hardcoded placeholder coordinates** (`startLat/startLng = -33.9581, 25.6014`, `endLat/endLng = -33.9615, 25.6089`) instead of the real trip's departure/destination. The code has a `TODO` to wire in `TripRepository` once the trip's coordinate columns are confirmed. This must be fixed before route data can be trusted for any real trip — see §4.2.
+> ✅ **Resolved in Phase 2.** The hardcoded placeholders (`-33.9581, 25.6014` → `-33.9615, 25.6089`) are
+> gone. `RouteController` now delegates to `TripRouteService`, which reads the trip's real
+> `departure_lat/lng` and `destination_lat/lng`. Behaviour changes worth knowing: a non-existent trip
+> now returns `404` and a trip with missing or `0,0` coordinates returns `400`, where both previously
+> returned the placeholder route as if nothing were wrong.
+
+### 2.3a Trip legs — `/api/trips/{tripId}`
+
+| Method | Endpoint | Returns |
+|---|---|---|
+| POST | `/api/trips/{tripId}/precompute-route` | `TripLegRouteResponse[]` — stores one ORS route per consecutive stop pair into `trip_leg_route`, replacing any existing legs |
+| GET | `/api/trips/{tripId}/legs` | `TripLegRouteResponse[]` — previously precomputed legs in travel order |
+
+`TripLegRouteResponse` summarises each leg (`legIndex`, `fromStopOrder`, `toStopOrder`, stop names,
+`distanceMeters`, `durationSeconds`, `pointCount`, `startPoint`, `endPoint`) rather than returning the
+full polyline, which would be hundreds of points per leg.
 
 ### 2.4 Geocoding — `/api/geocode`
 
@@ -103,7 +118,7 @@ Security is JWT-based and stateless (`SessionCreationPolicy.STATELESS`). Only `/
 ### Existing (already in `shuttle_db`)
 
 - **`trip`** — `trip_id`, `driver_id`, `trip_type`, `departure_stop`, `departure_lat/lng`, `destination_stop`, `destination_lat/lng`, `departure_time`, `arrival_time`, `available_seats`, `price`, `status`.
-- **`trip_stop`** — `id`, `trip_id`, `latitude`, `longitude`, `stop_name`, `stop_order`, `student_id` — ordered, per-trip waypoints. This is the foundation for leg-based simulation.
+- **`trip_stop`** — `id`, `trip_id`, `latitude`, `longitude`, `stop_name`, `stop_order`, `student_id`, `status` — ordered, per-trip waypoints. This is the foundation for leg-based simulation. `status` is `ENUM('PENDING','ARRIVED')`, added in Phase 4 by `doc/02_trip_stop_status.sql`; it was absent from the original schema, which blocked the simulator's stop-arrival step.
 
 ### Migration applied (cleanup + tracking columns)
 
@@ -177,12 +192,19 @@ private void advanceTrip(Trip trip) {
 - **Dwell time at stops:** on arrival, set `trip.dwell_until = now() + N seconds` (simulated boarding time) before moving to the next leg — keeps everything inside one scheduled method with no extra task infrastructure.
 - **Trip completion:** when the vehicle reaches the final stop's leg end, set `trip.status = COMPLETED`.
 
-### 4.4 Real-time transport — not yet implemented
+### 4.4 Real-time transport
 
-⚠️ **The repo currently has no WebSocket/STOMP configuration.** This needs to be added before the simulator can push live updates:
+✅ **Implemented in Phase 3.** `spring-boot-starter-websocket` is now a dependency, `WebSocketConfig`
+registers the STOMP endpoint at `/ws` with a simple in-memory broker on `/topic`, and
+`TrackingBroadcastService` is the single publishing seam the Phase 4 simulator should call — it should
+not hold a `SimpMessagingTemplate` itself.
 
-1. Add a `WebSocketConfig` registering a STOMP endpoint (e.g. `/ws`) with a simple broker on `/topic`.
-2. Publish two message shapes on `/topic/trip/{tripId}`:
+Handshake authentication applies: clients send `Authorization: Bearer <token>` on the `/ws` handshake,
+same as any REST call. ⚠️ Subscriptions are **not** authorised per-trip yet — any authenticated user
+can subscribe to any trip's topic. Tracked against Phase 5 in `doc/Task`.
+
+The two message shapes published on `/topic/trip/{tripId}`, implemented as `LocationUpdateDTO` and
+`StopEventDTO` in `dto/message` and locked by `TrackingMessageContractTest`:
 
 ```json
 // per-tick position update
@@ -215,10 +237,10 @@ private void advanceTrip(Trip trip) {
 |---|---|---|
 | 1 | DB cleanup (dedupe/fix coordinates, standardize status) | ✅ Done — `01_cleanup_and_simulation_schema.sql` |
 | 2 | `trip` tracking columns + `trip_leg_route` / `trip_location_history` tables | ✅ Done — same migration |
-| 3 | Wire `RouteController` to real trip coordinates (remove placeholders) | ❌ Not started |
-| 4 | Leg-route precomputation on trip creation | ❌ Not started |
-| 5 | `@Scheduled` simulation engine | ❌ Not started |
-| 6 | WebSocket/STOMP configuration + broadcasting | ❌ Not started (no infra exists yet) |
+| 3 | Wire `RouteController` to real trip coordinates (remove placeholders) | ✅ Done — Phase 2, via `TripRouteService` |
+| 4 | Leg-route precomputation on trip creation | ✅ Done — Phase 2, but as `POST /api/trips/{id}/precompute-route` rather than inside `createTrip`, so an ORS outage cannot block ride posting |
+| 5 | `@Scheduled` simulation engine | ✅ Done — Phase 4. Off unless `getyourride.tracking.simulation.enabled=true` |
+| 6 | WebSocket/STOMP configuration + broadcasting | ✅ Done — Phase 3. ⚠️ Subscriptions not yet authorised per-trip (Phase 5) |
 | 7 | Android `TrackingScreen` subscription + marker animation | ❌ Not started |
 
 ## 6. Security Note

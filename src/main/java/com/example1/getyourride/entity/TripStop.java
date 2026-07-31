@@ -32,6 +32,21 @@ public class TripStop {
     @Column(nullable = false)
     private Integer stopOrder;
 
+    /**
+     * Whether the vehicle has reached this stop. Driven by the simulation engine, which flips it to
+     * ARRIVED as it completes the leg terminating here.
+     *
+     * <p>Mapped as STRING, not ORDINAL: the underlying column is
+     * {@code ENUM('PENDING','ARRIVED')}, and ordinal mapping would write 0/1 into an enum column
+     * and silently break the moment a value is inserted in the middle of the Java enum.
+     *
+     * <p>{@code columnDefinition} is declared so that a schema generated from these entities matches
+     * the hand-written migration. Against an existing database Hibernate leaves the column alone.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, columnDefinition = "enum('PENDING','ARRIVED')")
+    private TripStopStatus status = TripStopStatus.PENDING;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id")
     private Student student;
@@ -62,4 +77,7 @@ public class TripStop {
 
     public Integer getStopOrder() { return stopOrder; }
     public void setStopOrder(Integer stopOrder) { this.stopOrder = stopOrder; }
+
+    public TripStopStatus getStatus() { return status; }
+    public void setStatus(TripStopStatus status) { this.status = status; }
 }

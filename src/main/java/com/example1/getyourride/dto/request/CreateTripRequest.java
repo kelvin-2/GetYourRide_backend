@@ -1,14 +1,15 @@
 package com.example1.getyourride.dto.request;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Request DTO for creating a new Trip.
@@ -41,5 +42,17 @@ public class CreateTripRequest {
     @NotNull(message = "Price is required")
     private BigDecimal price;
 
-    private List<TripStopRequest> stops;
+    /**
+     * Intermediate stops for the trip. Optional - a trip may be created with none.
+     *
+     * <p>The {@code @Valid} is load-bearing: without it Bean Validation does not descend
+     * into the list, so every constraint declared on {@link TripStopRequest} (including
+     * {@code @NotNull} on latitude/longitude) was silently inert on this endpoint and
+     * stops persisted with 0,0 coordinates. The element-level {@code @NotNull} is a
+     * separate gap: {@code @Valid} cascades into list elements but skips null ones, so
+     * a payload of {@code "stops": [null]} passed validation and then threw a
+     * NullPointerException inside TripServiceImpl.createTrip.
+     */
+    @Valid
+    private List<@NotNull(message = "Stop entries cannot be null") TripStopRequest> stops;
 }

@@ -1,25 +1,5 @@
 package com.example1.getyourride.service.impl;
 
-import com.example1.getyourride.dto.request.BookCarpoolRequest;
-import com.example1.getyourride.dto.request.CreateTripRequest;
-import com.example1.getyourride.dto.request.OfferRideRequest;
-import com.example1.getyourride.dto.response.OfferRideResponse;
-import com.example1.getyourride.dto.response.TripResponse;
-import com.example1.getyourride.dto.response.GeocodeResponse;
-import com.example1.getyourride.dto.response.TripStopResponse;
-import com.example1.getyourride.entity.*;
-import com.example1.getyourride.exception.ResourceNotFoundException;
-import com.example1.getyourride.exception.BadRequestException;
-import com.example1.getyourride.repository.DriverRepository;
-import com.example1.getyourride.repository.StudentRepository;
-import com.example1.getyourride.repository.TripRepository;
-import com.example1.getyourride.repository.VehicleRepository;
-import com.example1.getyourride.service.GeocodingService;
-import com.example1.getyourride.service.TripService;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,28 +7,69 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example1.getyourride.dto.request.BookCarpoolRequest;
+import com.example1.getyourride.dto.request.CreateTripRequest;
+import com.example1.getyourride.dto.request.OfferRideRequest;
+import com.example1.getyourride.dto.request.TripStopRequest;
+import com.example1.getyourride.dto.response.GeocodeResponse;
+import com.example1.getyourride.dto.response.OfferRideResponse;
+import com.example1.getyourride.dto.response.TripResponse;
+import com.example1.getyourride.dto.response.TripStopResponse;
+import com.example1.getyourride.entity.Driver;
+import com.example1.getyourride.entity.Student;
+import com.example1.getyourride.entity.Trip;
+import com.example1.getyourride.entity.TripStop;
+import com.example1.getyourride.entity.Vehicle;
+import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.ResourceNotFoundException;
+import com.example1.getyourride.repository.DriverRepository;
+import com.example1.getyourride.repository.StudentRepository;
+import com.example1.getyourride.repository.TripRepository;
+import com.example1.getyourride.repository.VehicleRepository;
+import com.example1.getyourride.service.GeocodingService;
+import com.example1.getyourride.service.TripService;
+import com.example1.getyourride.service.TripSimulationService;
+
 /**
  * Implementation of TripService.
  */
 @Service
 public class TripServiceImpl implements TripService {
 
+    /**
+     * Diagnostic logging for the coordinate-loss investigation. Deliberately at DEBUG so
+     * it is off in normal operation: stop coordinates are effectively student home
+     * addresses, and they should not sit in production logs. Enable with
+     * {@code logging.level.com.example1.getyourride.service.impl=DEBUG} while
+     * reproducing a client-side coordinate problem, then turn it back off.
+     */
+    private static final Logger log = LoggerFactory.getLogger(TripServiceImpl.class);
+
     private final TripRepository tripRepository;
     private final DriverRepository driverRepository;
     private final StudentRepository studentRepository;
     private final VehicleRepository vehicleRepository;
     private final GeocodingService geocodingService;
+    private final TripSimulationService tripSimulationService;
 
     public TripServiceImpl(TripRepository tripRepository,
                            DriverRepository driverRepository,
                            StudentRepository studentRepository,
                            VehicleRepository vehicleRepository,
-                           GeocodingService geocodingService) {
+                           GeocodingService geocodingService,
+                           TripSimulationService tripSimulationService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
         this.vehicleRepository = vehicleRepository;
         this.geocodingService = geocodingService;
+        this.tripSimulationService = tripSimulationService;
     }
 
     @Override
@@ -152,6 +173,7 @@ public class TripServiceImpl implements TripService {
         trip.setStatus("CONFIRMED");
 
         if (request.getStops() != null && !request.getStops().isEmpty()) {
+            logReceivedStops("POST /api/trips", request.getStops());
             request.getStops().forEach(stopRequest -> {
                 TripStop stop = new TripStop();
                 stop.setStopName(stopRequest.getStopName());
@@ -179,6 +201,11 @@ public class TripServiceImpl implements TripService {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Student student = studentRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with email: " + email));
+
+        if (log.isDebugEnabled()) {
+            log.debug("POST /api/trips/{}/book received pickup={} dropOff={}",
+                    tripId, describe(request.getPickupStop()), describe(request.getDropOffStop()));
+        }
 
         TripStop pickupStop = new TripStop();
         pickupStop.setTrip(trip);
@@ -243,6 +270,16 @@ public class TripServiceImpl implements TripService {
         }
 
         Trip updatedTrip = tripRepository.save(trip);
+
+        // Starting a trip has to reset its tracking cursor to the first stop, otherwise the
+        // simulation resumes from whatever leg/point indices the trip held from a previous run and
+        // the vehicle appears to teleport into the middle of its route. Done after the save so the
+        // status is already persisted when tracking state is initialised.
+        // See tracking documentation §4.6 step 3.
+        if ("IN_PROGRESS".equalsIgnoreCase(status)) {
+            tripSimulationService.startTracking(tripId);
+        }
+
         return mapToResponse(updatedTrip);
     }
 
@@ -314,6 +351,32 @@ public class TripServiceImpl implements TripService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Logs the stop coordinates exactly as they arrived, before any persistence.
+     *
+     * <p>Purpose is to settle whether a reported 0,0 stop originated on the client or in
+     * this service: if the log shows real coordinates but the stored row is 0,0 the fault
+     * is here, and if the log already shows 0 or null the client dropped them. Guarded by
+     * {@code isDebugEnabled} so the string building costs nothing when disabled.
+     */
+    private void logReceivedStops(String endpoint, List<TripStopRequest> stops) {
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+        for (int i = 0; i < stops.size(); i++) {
+            log.debug("{} received stops[{}]={}", endpoint, i, describe(stops.get(i)));
+        }
+    }
+
+    /** Renders a stop request for diagnostic logs, tolerating nulls at every level. */
+    private String describe(TripStopRequest stop) {
+        if (stop == null) {
+            return "null";
+        }
+        return String.format("{name=%s, lat=%s, lng=%s, order=%s}",
+                stop.getStopName(), stop.getLatitude(), stop.getLongitude(), stop.getStopOrder());
+    }
+
     private TripResponse mapToResponse(Trip trip) {
         TripResponse.TripResponseBuilder builder = TripResponse.builder()
                 .tripId(trip.getTripId())
@@ -347,6 +410,7 @@ public class TripServiceImpl implements TripService {
                                 .latitude(stop.getLatitude())
                                 .longitude(stop.getLongitude())
                                 .stopOrder(stop.getStopOrder())
+                                .status(stop.getStatus())
                                 .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
                                 .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
                                 .build())
