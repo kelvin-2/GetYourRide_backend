@@ -135,6 +135,7 @@ public class TripStopServiceImpl implements TripStopService {
                 .latitude(stop.getLatitude())
                 .longitude(stop.getLongitude())
                 .stopOrder(stop.getStopOrder())
+                .status(stop.getStatus())
                 .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
                 .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
                 .build();

@@ -46,6 +46,15 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!--
+          STOMP-over-WebSocket transport for live trip tracking (doc/Task Phase 3).
+          Version is managed by spring-boot-starter-parent, so it stays aligned with the
+          rest of the Spring Boot dependencies.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

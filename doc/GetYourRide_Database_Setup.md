@@ -124,6 +124,38 @@ server.port=8080
   schema was migrated as-is and we don't want Hibernate silently altering
   tables or clashing with the manually-added foreign keys on startup.
 
+> ⚠️ **The committed `application.properties` does not currently match this.** It
+> still has `spring.datasource.url` pointing at `localhost:3306/shuttle_db` and
+> `spring.jpa.hibernate.ddl-auto=update`. The consequence is not theoretical: with
+> `update` active, Hibernate has already downgraded `trip.status` from
+> `ENUM(...)` to `varchar(255)` — see `doc/03_restore_trip_status_enum.sql` — and it
+> re-attempts two ALTERs on `registration_number` that fail against the
+> `fk_trip_vehicle` foreign key on every start. Setting `ddl-auto=none` as
+> documented here resolves both.
+
+---
+
+## Schema Migrations Applied After the Initial Migration
+
+The schema is maintained by numbered SQL files run by hand, not by an automated
+migration tool. Run them in order against a copy first.
+
+| File | Adds | Phase |
+|---|---|---|
+| `01_cleanup_and_simulation_schema.sql` | Coordinate/status cleanup; `trip` tracking columns (`current_lat`, `current_lng`, `current_leg_index`, `current_point_index`, `dwell_until`); `trip_leg_route`; `trip_location_history` | 0 |
+| `02_trip_stop_status.sql` | `trip_stop.status ENUM('PENDING','ARRIVED') NOT NULL DEFAULT 'PENDING'`, plus a backfill marking stops on COMPLETED trips as ARRIVED | 4 |
+| `03_restore_trip_status_enum.sql` | Repair only — restores `trip.status` to its ENUM after `ddl-auto=update` downgraded it | 4 |
+
+### `trip_stop` (current)
+
+```
+id, trip_id, latitude, longitude, stop_name, stop_order, student_id, status
+```
+
+`status` is written by the simulation engine: `PENDING` until the vehicle reaches
+the stop, then `ARRIVED`. Reset to `PENDING` for every stop when a trip is
+restarted.
+
 ---
 
 ## Connecting from Other Stacks

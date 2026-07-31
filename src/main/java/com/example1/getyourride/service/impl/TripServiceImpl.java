@@ -34,6 +34,7 @@ import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import com.example1.getyourride.service.GeocodingService;
 import com.example1.getyourride.service.TripService;
+import com.example1.getyourride.service.TripSimulationService;
 
 /**
  * Implementation of TripService.
@@ -55,17 +56,20 @@ public class TripServiceImpl implements TripService {
     private final StudentRepository studentRepository;
     private final VehicleRepository vehicleRepository;
     private final GeocodingService geocodingService;
+    private final TripSimulationService tripSimulationService;
 
     public TripServiceImpl(TripRepository tripRepository,
                            DriverRepository driverRepository,
                            StudentRepository studentRepository,
                            VehicleRepository vehicleRepository,
-                           GeocodingService geocodingService) {
+                           GeocodingService geocodingService,
+                           TripSimulationService tripSimulationService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
         this.vehicleRepository = vehicleRepository;
         this.geocodingService = geocodingService;
+        this.tripSimulationService = tripSimulationService;
     }
 
     @Override
@@ -266,6 +270,16 @@ public class TripServiceImpl implements TripService {
         }
 
         Trip updatedTrip = tripRepository.save(trip);
+
+        // Starting a trip has to reset its tracking cursor to the first stop, otherwise the
+        // simulation resumes from whatever leg/point indices the trip held from a previous run and
+        // the vehicle appears to teleport into the middle of its route. Done after the save so the
+        // status is already persisted when tracking state is initialised.
+        // See tracking documentation §4.6 step 3.
+        if ("IN_PROGRESS".equalsIgnoreCase(status)) {
+            tripSimulationService.startTracking(tripId);
+        }
+
         return mapToResponse(updatedTrip);
     }
 
@@ -396,6 +410,7 @@ public class TripServiceImpl implements TripService {
                                 .latitude(stop.getLatitude())
                                 .longitude(stop.getLongitude())
                                 .stopOrder(stop.getStopOrder())
+                                .status(stop.getStatus())
                                 .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
                                 .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
                                 .build())

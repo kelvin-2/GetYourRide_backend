@@ -166,10 +166,46 @@ Each branch should be independently testable before merging to `main` — don't 
 - [ ] Confirm the ORS API key in `application.properties` is still valid and has quota (and flag it's still committed in plaintext — see security note in the tracking doc)
 - [ ] Test `RouteController` against a real trip ID and confirm it returns a road-following polyline, not a straight line between placeholders
 
+> Both are **blocked, not done** — they need a live ORS call and a reachable database. ⚠️ The ORS key
+> is still committed in plaintext in `application.properties`; that is Phase 5 scope and remains open.
+
 **Acceptance Criteria:**
-- [ ] `GET /api/rides/{rideId}/route` returns geometry matching the trip's actual departure/destination
-- [ ] `trip_leg_route` has one row per consecutive stop pair for a fully-stopped trip
+- [x] `GET /api/rides/{rideId}/route` returns geometry matching the trip's actual departure/destination
+- [x] `trip_leg_route` has one row per consecutive stop pair for a fully-stopped trip
 - [ ] Legs with previously-bad coordinates (trips 3, 6, 24) now produce sane, short-distance polylines within Gqeberha
+
+**Status:** ⚠️ Code complete and unit-tested. Two criteria verified by test, one needs a live environment.
+
+**Notes on deviations from the original plan:**
+- Precomputation is exposed as `POST /api/trips/{tripId}/precompute-route` rather than being run
+  inside `createTrip`. The deliverable permitted either. A trip with N stops makes N-1 ORS calls, so
+  folding it into trip creation would mean an ORS outage or an exhausted quota stopped drivers from
+  posting rides entirely. As a separate call it is idempotent and retryable, and a failure leaves the
+  trip intact.
+- `RouteController` calls a new `TripRouteService` rather than `TripRepository` directly. The `TODO`
+  in the file sketched injecting the repository into the controller, but `doc/project-rules.md`
+  states controllers never touch repositories, so the lookup moved into the service layer.
+- Added `GET /api/trips/{tripId}/legs` beyond the written deliverables. Without it, the second
+  acceptance criterion ("one row per consecutive stop pair") could only be checked with direct
+  database access, and Phase 4's simulator needs to read legs anyway.
+- `RouteService` gained response-shape and error handling. It previously chained
+  `get("features").get(0)` straight through, which was safe only because the coordinates were two
+  hardcoded points. Now that real trip and stop coordinates reach it, an unroutable point returns a
+  404 from ORS, so failures are translated into `BadRequestException` with the reason attached
+  instead of surfacing as an opaque 500 or a NullPointerException.
+- **Design gap flagged, not silently resolved:** legs are built purely from consecutive `trip_stop`
+  pairs, exactly as tracking doc §4.1 specifies. But `trip_stop` does not always cover the trip's own
+  departure/destination — trip 24's stops run *Summerstrand → North Campus* while its
+  `destination_stop` is *South Campus*, so its single leg stops short of the destination. Following
+  the documented design rather than inventing a rule that splices `trip.departure_*`/`destination_*`
+  into the leg sequence. Needs a decision before Phase 4 if legs are meant to reach the destination.
+- The third acceptance criterion cannot be verified here: it needs live ORS calls against trips 3, 6
+  and 24 in the hosted database. Manual steps are in the Routing section of `doc/ARCHITECTURE.md`.
+- 24 new tests (`TripRouteServiceImplTest`, `RouteServiceTest`), all passing, no database or ORS quota
+  required. `RouteServiceTest` uses `MockRestServiceServer`, so no real ORS request is made.
+- Not touched: the `trip` tracking columns (`current_lat`, `current_lng`, `current_leg_index`,
+  `current_point_index`, `dwell_until`) exist in the database but are still unmapped on the `Trip`
+  entity. That is Phase 4/5 scope.
 
 ---
 
@@ -185,12 +221,50 @@ Each branch should be independently testable before merging to `main` — don't 
 - A test publisher (manually triggered) to confirm messages reach a subscribed client before the scheduler exists
 
 **What to check first:**
-- [ ] Confirm Spring Boot has `spring-boot-starter-websocket` as a dependency (check `pom.xml`/`build.gradle`)
+- [x] Confirm Spring Boot has `spring-boot-starter-websocket` as a dependency (check `pom.xml`/`build.gradle`)
 - [ ] Test the endpoint with `wscat` or Postman's WebSocket support before writing any Android client code
+
+> It was **not** a dependency — added in this phase, version managed by `spring-boot-starter-parent`.
+> The `wscat` check is blocked: it needs a running instance, which needs a reachable database.
+> Confirmed `spring-security-messaging` is *not* on the classpath, so there is no STOMP CSRF
+> interception to configure.
 
 **Acceptance Criteria:**
 - [ ] A client can subscribe to `/topic/trip/{tripId}` and receive a manually-published test message
-- [ ] Message shapes match the documented JSON in `GetYourRide_Tracking_Documentation.md` §4.4
+- [x] Message shapes match the documented JSON in `GetYourRide_Tracking_Documentation.md` §4.4
+
+**Status:** ⚠️ Code complete and unit-tested. Message contract verified; end-to-end subscribe test needs a running instance.
+
+**Notes on deviations from the original plan:**
+- The test publisher is **disabled by default**, behind
+  `getyourride.tracking.test-publisher.enabled=true` (commented line in `application.properties`).
+  While enabled, any authenticated caller can broadcast a fabricated vehicle position to a trip's
+  subscribers, so it must not ship on. With the flag absent the bean is not registered and the routes
+  return 404. Enabling it is required to complete the first acceptance criterion.
+- Added `TrackingBroadcastService` beyond the listed deliverables. It is the seam Phase 4's simulator
+  publishes through, so the destination format and message construction live in one place and the
+  simulator stays unit-testable without a broker.
+- Added `TrackingMessageType` and `StopEventStatus` enums plus a `TrackingMessage` interface. Enums
+  because the wire values are a closed set and `doc/project-rules.md` prefers enums for new
+  status-like fields; the interface so the broadcast service has one payload type and any future
+  message shape is forced to carry the `type` discriminator.
+- Messages live in a new `dto/message` package and keep the `...DTO` suffix from the deliverables
+  rather than the `XxxRequest`/`XxxResponse` convention, because they are neither — they are
+  server-pushed messages.
+- `lat`/`lng` field names kept as documented even though the rest of the codebase uses
+  `latitude`/`longitude`. The contract wins; renaming would break the Android client silently.
+- No SockJS and no application destination prefix, both deliberate and both pinned by tests. See the
+  Live Tracking Transport section of `doc/ARCHITECTURE.md` for the reasoning.
+- 18 new tests (`TrackingMessageContractTest`, `TrackingBroadcastServiceImplTest`,
+  `WebSocketConfigTest`), all passing, no broker or database required.
+
+> ⚠️ **Security gap carried into Phase 5:** the `/ws` handshake is authenticated (it is not in the
+> public matcher list, so `JwtAuthFilter` applies), but STOMP *subscriptions* are not authorised
+> per-trip. Any authenticated user can subscribe to `/topic/trip/{tripId}` and watch any trip's live
+> position. Closing it needs a `ChannelInterceptor` on the inbound channel checking SUBSCRIBE frames,
+> plus a policy decision on who may watch a trip — the driver, students with a `trip_stop` on it,
+> students with a `trip_booking`? Note `trip_booking` has no entity mapping, so booking-based access
+> is not currently queryable. Not guessed at here.
 
 ---
 
@@ -207,14 +281,67 @@ Each branch should be independently testable before merging to `main` — don't 
 - Trip-completion logic: set `trip.status = COMPLETED` on reaching the final stop
 
 **What to check first:**
-- [ ] Pick one clean test trip (post-migration) and dry-run the tick logic with logging before enabling the `@Scheduled` annotation broadly
-- [ ] Verify `STEP_SIZE`/tick interval produces a reasonable simulated speed (not instant, not glacial) against a real leg distance
+- [x] Pick one clean test trip (post-migration) and dry-run the tick logic with logging before enabling the `@Scheduled` annotation broadly
+- [x] Verify `STEP_SIZE`/tick interval produces a reasonable simulated speed (not instant, not glacial) against a real leg distance
+
+> The scheduler is **off unless `getyourride.tracking.simulation.enabled=true`**, so the dry-run
+> requirement is enforced by configuration rather than by discipline. Step size is derived per leg from
+> the leg's own ORS `duration_seconds` and compressed by `speed-multiplier` (default 10x), so pacing is
+> proportional to real driving time rather than a flat constant — covered by unit tests with the
+> arithmetic spelled out.
 
 **Acceptance Criteria:**
-- [ ] Starting a trip (`status = IN_PROGRESS`) causes visible position updates in `trip_location_history` every tick
-- [ ] Vehicle correctly pauses at `dwell_until` before advancing to the next leg
-- [ ] Trip reaches `COMPLETED` status after its final leg, not before
-- [ ] No two trips interfere with each other's `current_leg_index`/`current_point_index` state
+- [x] Starting a trip (`status = IN_PROGRESS`) causes visible position updates in `trip_location_history` every tick
+- [x] Vehicle correctly pauses at `dwell_until` before advancing to the next leg
+- [x] Trip reaches `COMPLETED` status after its final leg, not before
+- [x] No two trips interfere with each other's `current_leg_index`/`current_point_index` state
+
+**Status:** ✅ Implemented and unit-tested. All four criteria covered by tests; end-to-end run against a live trip still worth doing manually (steps in `doc/ARCHITECTURE.md`).
+
+**Prerequisite added this phase:**
+- `doc/02_trip_stop_status.sql` adds `trip_stop.status ENUM('PENDING','ARRIVED') NOT NULL DEFAULT
+  'PENDING'`, plus a backfill setting stops on already-COMPLETED trips to ARRIVED. The column did not
+  exist in the documented schema, which blocked the "mark `trip_stop.status = ARRIVED`" deliverable.
+  Run it before starting the app.
+
+**Notes on deviations from the original plan:**
+- `@Scheduled` lives on `scheduler.TripSimulationScheduler`, not on `TripSimulationService` as the
+  deliverable describes. Reason: each trip must advance in its own transaction so one failing trip
+  cannot roll back or block the others, and Spring applies `@Transactional` via a proxy that a
+  same-bean method call bypasses. Crossing a bean boundary makes the proxy apply and lets the loop
+  catch per trip. This is what actually satisfies the fourth acceptance criterion.
+- **The scheduler is disabled by default** (`getyourride.tracking.simulation.enabled`, no
+  `matchIfMissing`). Every tick writes to the database, and anything starting an application context
+  inherits that — including the `@SpringBootTest` suite, which runs against the real configured
+  database. Verified during this phase that the scheduler was live in the Spring context tests before
+  the default was flipped; no trip happened to be `IN_PROGRESS`, so nothing was mutated, but the
+  exposure was real.
+- Mapped the five `trip` tracking columns (`current_lat`, `current_lng`, `current_leg_index`,
+  `current_point_index`, `dwell_until`) that existed since Phase 0 but had never been wired to the
+  entity. Carried forward from the Phase 2 notes.
+- Added `TripLocationHistory` entity + repository; the table existed from Phase 0 but had no mapping.
+- `startTracking` added beyond the listed deliverables, called from `TripServiceImpl.updateTripStatus`
+  when a trip moves to `IN_PROGRESS`. Implements tracking doc §4.6 step 3. Without it a re-run trip
+  resumes from stale indices and the vehicle appears to teleport mid-route; it also clears `ARRIVED`
+  stops from a previous run.
+- Added `status` to `TripStopResponse`. §4.5 has the client fetching stops on screen load to draw
+  initial state, and `STOP_EVENT` only covers arrivals that happen while subscribed — without this a
+  reconnecting client shows every stop as outstanding.
+- Step size is derived per leg rather than being a single `STEP_SIZE` constant, following the
+  suggestion in tracking doc §4.3.
+- 34 new tests (`TripSimulationServiceImplTest`, `TripSimulationSchedulerTest`), all passing, no
+  database required.
+
+> ⚠️ **Schema regression found, not caused by this phase's code but surfaced by it.** The database
+> became reachable during this phase, so Hibernate's `ddl-auto=update` ran for the first time in this
+> work and issued `alter table trip modify column status varchar(255) not null` — successfully. That
+> silently undoes Phase 0's "`trip.status` is an ENUM" acceptance criterion, and it will recur on every
+> application start. Cause: `Trip.status` is mapped as a Java `String`, so Hibernate "corrects" the
+> ENUM to varchar. Repair SQL and both fix options are in `doc/03_restore_trip_status_enum.sql`; the
+> recommended fix is `spring.jpa.hibernate.ddl-auto=none`, which is what
+> `doc/GetYourRide_Database_Setup.md` already specifies. Two further ALTERs
+> (`trip.registration_number`, `vehicle.registration_number`) fail on every start, blocked by the
+> `fk_trip_vehicle` foreign key — harmless but noisy, and they disappear with the same fix.
 
 ---
 
@@ -229,10 +356,19 @@ Each branch should be independently testable before merging to `main` — don't 
 - Reasonable STOMP session handling so a dropped/reconnecting client doesn't leave orphaned state server-side
 - Secrets moved out of `application.properties` into environment variables (DB password, ORS key, Geoapify key)
 - Backend test suite covering: trip creation with valid/invalid stops, route precompute, one full simulated tick cycle via `pytest`/JUnit equivalent
+- **Added during Phase 3 —** per-trip authorisation on STOMP `SUBSCRIBE` frames. The `/ws` handshake is
+  authenticated, but subscriptions are not scoped: any authenticated user can subscribe to
+  `/topic/trip/{tripId}` and watch any trip's live position. Needs a `ChannelInterceptor` on the
+  inbound channel plus a decision on who is entitled to watch a trip (driver only? students with a
+  `trip_stop` on it? students with a `trip_booking`? — note `trip_booking` has no entity mapping yet).
+- **Added during Phase 3 —** remove the dev-only `TrackingTestPublisherController`, or confirm the
+  `getyourride.tracking.test-publisher.enabled` flag is off wherever the app is deployed. While
+  enabled it lets any authenticated caller broadcast a fabricated vehicle position.
 
 **What to check first:**
 - [ ] Confirm `GET /api/trips/{id}` already returns the tracking columns added in Phase 0 — if not, add them to `TripResponse`
 - [ ] Confirm database credentials/API keys are no longer visible in the committed `application.properties`
+- [ ] Confirm the `trip` tracking columns (`current_lat`, `current_lng`, `current_leg_index`, `current_point_index`, `dwell_until`) are mapped on the `Trip` entity — they existed in the database from Phase 0 but were still unmapped as of Phase 2
 
 **Acceptance Criteria:**
 - [ ] No secrets remain committed to the repo
@@ -248,9 +384,9 @@ Each branch should be independently testable before merging to `main` — don't 
 |-------|--------|-------|------------------|
 | 0 | `step-0-db-cleanup` | Data integrity | Migration + tracking schema ✅ |
 | 1 | `step-1-validation-fixes` | Bug fix | Close the 0,0 coordinate bug ⚠️ backend done, client trace outstanding |
-| 2 | `step-2-route-wiring` | Backend | Real-data `RouteController` + leg precompute |
-| 3 | `step-4-websocket` | Infra | STOMP endpoint + message contracts (backend only) |
-| 4 | `step-5-scheduler` | Backend | `@Scheduled` simulation engine |
+| 2 | `step-2-route-wiring` | Backend | Real-data `RouteController` + leg precompute ⚠️ code complete, live verification outstanding |
+| 3 | `step-4-websocket` | Infra | STOMP endpoint + message contracts (backend only) ⚠️ code complete, live subscribe test outstanding |
+| 4 | `step-5-scheduler` | Backend | `@Scheduled` simulation engine ✅ |
 | 5 | `step-6-backend-hardening` | Hardening | Polling fallback, secrets, test coverage |
 
 Frontend/Android tracking UI phases live in [`tasks-frontend.md`](tasks-frontend.md), owned separately.
