@@ -3,7 +3,7 @@ POST http://localhost:8080/api/auth/student/register
 Content-Type: application/json
 
 {
-  "studentNumber": "S12345678",
+  "studentNumber": "S123456",
   "firstName": "Kelvin",
   "lastName": "Mudzingwa",
   "email": "test@mandela.ac.za",

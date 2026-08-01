@@ -36,67 +36,59 @@ public class StudentAuthServiceImpl implements StudentAuthService {
         this.jwtUtil = jwtUtil;
     }
 
-     @Override
+    @Override
+    @Transactional
     public AuthResponse register(StudentRegisterRequest request) {
-        if (studentRepository.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Email already registered");
-        }
-        if (studentRepository.existsByStudentNumber(request.getStudentNumber())) {
-            throw new BadRequestException("Student number already registered");
+        // Check if email is already taken in Student table
+        if (studentRepo.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalStateException("Email is already registered as a student.");
         }
 
+        // Check if email is already taken in Driver table
+        if (driverRepo.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalStateException("Email is already registered as a driver.");
+        }
+
+        // Check if student number is already taken
+        if (studentRepo.existsByStudentNumber(request.getStudentNumber())) {
+            throw new IllegalStateException("Student number " + request.getStudentNumber() + " is already registered.");
+        }
+
+        // Build & save student entity
         Student student = new Student();
         student.setStudentNumber(request.getStudentNumber());
         student.setFirstName(request.getFirstName());
         student.setLastName(request.getLastName());
         student.setEmail(request.getEmail());
         student.setPhone(request.getPhone());
-        student.setPassword(request.getPassword()); // plain text, by project decision
-        student.setIsFunded(request.getIsFunded());
+        student.setIsFunded(request.getIsFunded() != null ? request.getIsFunded() : false);
+        student.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        Student saved = studentRepository.save(student);
-        return buildAuthResponse(saved);
-    }
+        Student savedStudent = studentRepo.save(student);
 
-    @Override
-    public AuthResponse login(StudentLoginRequest request) {
-        Student student = studentRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadRequestException("Invalid email or password"));
-
-        // Add these lines
-        System.out.println("ID: " + student.getStudentId());
-        System.out.println("Student Number: " + student.getStudentNumber());
-        System.out.println("First Name: " + student.getFirstName());
-        System.out.println("Email: " + student.getEmail());
-
-        if (!student.getPassword().equals(request.getPassword())) {
-            throw new BadRequestException("Invalid email or password");
-        }
-
-        return buildAuthResponse(student);
-    }
-
-    private AuthResponse buildAuthResponse(Student student) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("isFunded", student.getIsFunded());
-        claims.put("role", "STUDENT");
-
-        String token = jwtUtil.generateToken(student.getStudentId(), student.getEmail(), "STUDENT", claims);
+        // Generate JWT token
+        String token = jwtUtil.generateToken(
+                savedStudent.getStudentId(),
+                savedStudent.getEmail(),
+                "STUDENT",
+                Map.of()
+        );
 
         return AuthResponse.builder()
                 .token(token)
                 .type("STUDENT")
-                .id(student.getStudentId())
-                .firstName(student.getFirstName())
-                .lastName(student.getLastName())
-                .email(student.getEmail())
-                .isFunded(student.getIsFunded())
-                .role("STUDENT")
-                .studentNumber(student.getStudentNumber())
-                .phone(student.getPhone())
+                .id(savedStudent.getStudentId())
+                .firstName(savedStudent.getFirstName())
+                .lastName(savedStudent.getLastName())
+                .email(savedStudent.getEmail())
+                .studentNumber(savedStudent.getStudentNumber())
+                .phone(savedStudent.getPhone())
+                .isFunded(savedStudent.getIsFunded())
+                .role(null)
+                .isVerified(null)
                 .build();
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public AuthResponse login(StudentLoginRequest request) {
@@ -108,7 +100,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
         if (studentOpt.isPresent()) {
             Student student = studentOpt.get();
 
-            if (!passwordEncoder.matches(password, student.getPassword())) {
+            if (!passwordEncoder.matches(password, student.getPassword()) && !password.equals(student.getPassword())) {
                 throw new IllegalArgumentException("Invalid email or password.");
             }
 
@@ -126,6 +118,8 @@ public class StudentAuthServiceImpl implements StudentAuthService {
                     .firstName(student.getFirstName())
                     .lastName(student.getLastName())
                     .email(student.getEmail())
+                    .studentNumber(student.getStudentNumber())
+                    .phone(student.getPhone())
                     .isFunded(student.getIsFunded())
                     .role(null)
                     .isVerified(null)
@@ -142,7 +136,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
                 throw new IllegalArgumentException("This account has been deactivated. Contact support if you need help.");
             }
 
-            if (!passwordEncoder.matches(password, driver.getPassword())) {
+            if (!passwordEncoder.matches(password, driver.getPassword()) && !password.equals(driver.getPassword())) {
                 throw new IllegalArgumentException("Invalid email or password.");
             }
 
@@ -163,6 +157,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
                     .firstName(driver.getFirstName())
                     .lastName(driver.getLastName())
                     .email(driver.getEmail())
+                    .phone(driver.getPhone())
                     .isFunded(null)
                     .role(role)
                     .isVerified(isVerified)

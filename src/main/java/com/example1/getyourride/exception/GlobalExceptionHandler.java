@@ -3,6 +3,7 @@ package com.example1.getyourride.exception;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -19,6 +20,28 @@ public class GlobalExceptionHandler {
         Map<String, String> body = new HashMap<>();
         body.put("error", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
+        Map<String, String> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
+        Map<String, String> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        Map<String, String> body = new HashMap<>();
+        body.put("error", "Database error: A record with this information already exists.");
+        // Log the actual exception in a real scenario
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
