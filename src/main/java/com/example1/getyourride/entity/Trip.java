@@ -68,6 +68,14 @@ public class Trip {
     @Column(name = "status", nullable = false)
     private String status;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slot_id")
+    private ShuttleTimeSlot timeSlot;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "route_id")
+    private ShuttleRoute route;
+
     // --- Live tracking state -------------------------------------------------
     // These columns were added by the Phase 0 migration but stayed unmapped until
     // Phase 4 needed them. Together they are the simulation engine's resume point:

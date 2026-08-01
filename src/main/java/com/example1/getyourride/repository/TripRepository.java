@@ -31,6 +31,10 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @EntityGraph(attributePaths = {"driver", "vehicle"})
     List<Trip> findByStatus(String status);
     
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE t.tripId = :tripId")
+    Optional<Trip> findByIdForUpdate(@org.springframework.data.repository.query.Param("tripId") Long tripId);
+
     /**
      * Find trips by driver ID.
      * @param driverId The ID of the driver.
@@ -39,6 +43,12 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @EntityGraph(attributePaths = {"driver", "vehicle"})
     List<Trip> findByDriverDriverId(Long driverId);
 
+    @EntityGraph(attributePaths = {"driver", "vehicle"})
+    List<Trip> findByTripTypeIgnoreCaseAndStatus(String tripType, String status);
+
+    @EntityGraph(attributePaths = {"driver", "vehicle"})
+    List<Trip> findByTripTypeIgnoreCase(String tripType);
+
     /**
      * Search for trips by departure and destination stop.
      * @param departure Departure stop keyword.
@@ -46,7 +56,14 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
      * @return List of matching trips.
      */
     @EntityGraph(attributePaths = {"driver", "vehicle"})
-    List<Trip> findByDepartureStopContainingIgnoreCaseAndDestinationStopContainingIgnoreCase(String departure, String destination);
+    @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE " +
+            "LOWER(t.departureStop) LIKE LOWER(CONCAT('%', :departure, '%')) AND " +
+            "LOWER(t.destinationStop) LIKE LOWER(CONCAT('%', :destination, '%')) AND " +
+            "(:includeShuttle = true OR LOWER(t.tripType) != 'shuttle')")
+    List<Trip> findByDepartureAndDestination(
+            @org.springframework.data.repository.query.Param("departure") String departure,
+            @org.springframework.data.repository.query.Param("destination") String destination,
+            @org.springframework.data.repository.query.Param("includeShuttle") boolean includeShuttle);
 
     /**
      * Search for trips by coordinates with a specific radius (approximate using bounding box).
@@ -58,7 +75,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             "(s.latitude BETWEEN :minDepLat AND :maxDepLat AND s.longitude BETWEEN :minDepLng AND :maxDepLng)) AND " +
             "((t.destinationLat BETWEEN :minDestLat AND :maxDestLat AND t.destinationLng BETWEEN :minDestLng AND :maxDestLng) OR " +
             "(s.latitude BETWEEN :minDestLat AND :maxDestLat AND s.longitude BETWEEN :minDestLng AND :maxDestLng)) AND " +
-            "t.status = :status")
+            "t.status = :status AND (:includeShuttle = true OR LOWER(t.tripType) != 'shuttle')")
     List<Trip> findNearbyTrips(
             @org.springframework.data.repository.query.Param("minDepLat") Double minDepLat,
             @org.springframework.data.repository.query.Param("maxDepLat") Double maxDepLat,
@@ -68,5 +85,8 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             @org.springframework.data.repository.query.Param("maxDestLat") Double maxDestLat,
             @org.springframework.data.repository.query.Param("minDestLng") Double minDestLng,
             @org.springframework.data.repository.query.Param("maxDestLng") Double maxDestLng,
-            @org.springframework.data.repository.query.Param("status") String status);
+            @org.springframework.data.repository.query.Param("status") String status,
+            @org.springframework.data.repository.query.Param("includeShuttle") boolean includeShuttle);
+    @org.springframework.data.jpa.repository.Query(""SELECT DISTINCT t FROM Trip t JOIN t.stops s WHERE s.student.studentId = :studentId"")
+    List<Trip> findTripsByStudentInStops(@org.springframework.data.repository.query.Param(""studentId"") Long studentId);
 }

@@ -1,0 +1,29 @@
+[2026-08-01 16:55]
+Modified: ShuttleBookingServiceImpl.java
+Reason: Added isFunded check to bookShuttle and updated full shuttle error message to "There are no more shuttles try next slot" as per requirements.
+
+[2026-08-01 16:56]
+Modified: TripResponse.java
+Reason: Added pickupDistance and dropOffDistance fields to return proximity information during trip search.
+
+[2026-08-01 16:57]
+Modified: TripRepository.java
+Reason: Updated findNearbyTrips and added findByDepartureAndDestination to support filtering by includeShuttle flag, ensuring non-funded students only see carpool options.
+
+[2026-08-01 16:58]
+Modified: TripService.java and TripController.java
+Reason: Updated search methods to accept student email to determine funding status.
+
+[2026-08-01 16:59]
+Modified: TripServiceImpl.java
+Reason: Implemented funding-based filtering in searches and added Haversine distance calculation for search results.
+
+[2026-08-01 17:15]
+Modified: ShuttleBookingServiceImpl.java, ShuttleBookingService.java, ShuttleBookingController.java
+Reason: Updated shuttle booking to return a summary including confirmed and available shuttles. Added funding check (already partially present).
+Modified: TripServiceImpl.java
+Reason: Enhanced getMyTrips to support student role by fetching booked trips.
+Added: ShuttleBookingSummaryResponse.java
+Added: doc/FUNDED_STUDENT_SHUTTLE_BOOKING.md
+Modified: auth-requests.http
+Reason: Added testing scenarios for student shuttle booking and viewing trips.

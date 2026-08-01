@@ -37,5 +37,7 @@ public class TripResponse {
     private String status;
     private long studentId;
     private String studentName;
+    private Double pickupDistance;
+    private Double dropOffDistance;
     private List<TripStopResponse> stops;
 }

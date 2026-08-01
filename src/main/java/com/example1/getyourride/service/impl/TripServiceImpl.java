@@ -5,8 +5,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +26,7 @@ import com.example1.getyourride.dto.response.GeocodeResponse;
 import com.example1.getyourride.dto.response.OfferRideResponse;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.dto.response.TripStopResponse;
+import com.example1.getyourride.entity.Booking;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.entity.Trip;
@@ -28,6 +34,7 @@ import com.example1.getyourride.entity.TripStop;
 import com.example1.getyourride.entity.Vehicle;
 import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
+import com.example1.getyourride.repository.BookingRepository;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
@@ -55,6 +62,7 @@ public class TripServiceImpl implements TripService {
     private final DriverRepository driverRepository;
     private final StudentRepository studentRepository;
     private final VehicleRepository vehicleRepository;
+    private final BookingRepository bookingRepository;
     private final GeocodingService geocodingService;
     private final TripSimulationService tripSimulationService;
 
@@ -62,12 +70,14 @@ public class TripServiceImpl implements TripService {
                            DriverRepository driverRepository,
                            StudentRepository studentRepository,
                            VehicleRepository vehicleRepository,
+                           BookingRepository bookingRepository,
                            GeocodingService geocodingService,
                            TripSimulationService tripSimulationService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
         this.vehicleRepository = vehicleRepository;
+        this.bookingRepository = bookingRepository;
         this.geocodingService = geocodingService;
         this.tripSimulationService = tripSimulationService;
     }
@@ -316,19 +326,22 @@ public class TripServiceImpl implements TripService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TripResponse> searchTrips(String departure, String destination) {
+    public List<TripResponse> searchTrips(String departure, String destination, String studentEmail) {
         GeocodeResponse depGeocode = geocodingService.geocode(departure);
         GeocodeResponse destGeocode = geocodingService.geocode(destination);
+
+        boolean includeShuttle = isStudentFunded(studentEmail);
 
         if (depGeocode.isFound() && destGeocode.isFound()) {
             return searchTripsByCoordinates(
                     depGeocode.getLatitude(), depGeocode.getLongitude(),
                     destGeocode.getLatitude(), destGeocode.getLongitude(),
-                    2.0
+                    2.0,
+                    studentEmail
             );
         }
 
-        return tripRepository.findByDepartureStopContainingIgnoreCaseAndDestinationStopContainingIgnoreCase(departure, destination)
+        return tripRepository.findByDepartureAndDestination(departure, destination, includeShuttle)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -336,19 +349,61 @@ public class TripServiceImpl implements TripService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm) {
+    public List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm, String studentEmail) {
         double latRange = radiusInKm / 111.0;
         double lngRange = radiusInKm / 92.0;
+
+        boolean includeShuttle = isStudentFunded(studentEmail);
 
         return tripRepository.findNearbyTrips(
                         depLat - latRange, depLat + latRange,
                         depLng - lngRange, depLng + lngRange,
                         destLat - latRange, destLat + latRange,
                         destLng - lngRange, destLng + lngRange,
-                        "SCHEDULED"
+                        "SCHEDULED",
+                        includeShuttle
                 ).stream()
-                .map(this::mapToResponse)
+                .map(trip -> {
+                    TripResponse response = mapToResponse(trip);
+                    response.setPickupDistance(calculateMinDistance(depLat, depLng, trip));
+                    response.setDropOffDistance(calculateMinDistance(destLat, destLng, trip));
+                    return response;
+                })
                 .collect(Collectors.toList());
+    }
+
+    private boolean isStudentFunded(String email) {
+        if (email == null) return false;
+        return studentRepository.findByEmail(email)
+                .map(Student::getIsFunded)
+                .orElse(false);
+    }
+
+    private double calculateMinDistance(double lat, double lng, Trip trip) {
+        double minDistance = calculateDistance(lat, lng, trip.getDepartureLat(), trip.getDepartureLng());
+        
+        double destDist = calculateDistance(lat, lng, trip.getDestinationLat(), trip.getDestinationLng());
+        if (destDist < minDistance) minDistance = destDist;
+
+        if (trip.getStops() != null) {
+            for (TripStop stop : trip.getStops()) {
+                double stopDist = calculateDistance(lat, lng, stop.getLatitude(), stop.getLongitude());
+                if (stopDist < minDistance) minDistance = stopDist;
+            }
+        }
+        return minDistance;
+    }
+
+    private double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
+        if (lat1 == 0 && lng1 == 0 || lat2 == 0 && lng2 == 0) return 0.0;
+        final int R = 6371;
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 
     /**
@@ -418,14 +473,40 @@ public class TripServiceImpl implements TripService {
                 .build();
     }
     @Override
-@Transactional(readOnly = true)
-public List<TripResponse> getMyTrips(String email) {
-    Driver driver = driverRepository.findByEmail(email)
-            .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
+    @Transactional(readOnly = true)
+    public List<TripResponse> getMyTrips(String email) {
+        List<Trip> tripsAsDriver = new ArrayList<>();
+        List<Trip> tripsAsStudent = new ArrayList<>();
 
-    List<Trip> trips = tripRepository.findByDriverDriverIdOrderByDepartureTimeDesc(driver.getDriverId());
-    return trips.stream()
-            .map(this::mapToResponse)
-            .collect(Collectors.toList());
-}
+        Optional<Driver> driverOpt = driverRepository.findByEmail(email);
+        if (driverOpt.isPresent()) {
+            tripsAsDriver = tripRepository.findByDriverDriverIdOrderByDepartureTimeDesc(driverOpt.get().getDriverId());
+        }
+
+        Optional<Student> studentOpt = studentRepository.findByEmail(email);
+        if (studentOpt.isPresent()) {
+            Student student = studentOpt.get();
+            // From Bookings (formal shuttle bookings)
+            tripsAsStudent.addAll(bookingRepository.findByStudent(student).stream()
+                    .map(Booking::getTrip)
+                    .collect(Collectors.toList()));
+            
+            // From TripStops (carpool bookings where student added a stop)
+            tripsAsStudent.addAll(tripRepository.findTripsByStudentInStops(student.getStudentId()));
+        }
+
+        if (!driverOpt.isPresent() && !studentOpt.isPresent()) {
+            throw new ResourceNotFoundException(\User not found with email: \ + email);
+        }
+
+        List<Trip> allTrips = new ArrayList<>();
+        allTrips.addAll(tripsAsDriver);
+        allTrips.addAll(tripsAsStudent);
+
+        return allTrips.stream()
+                .distinct()
+                .map(this::mapToResponse)
+                .sorted(Comparator.comparing(TripResponse::getDepartureTime).reversed())
+                .collect(Collectors.toList());
+    }
 }

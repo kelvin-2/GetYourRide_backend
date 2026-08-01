@@ -246,7 +246,7 @@ public class TripControllerTest {
         Mockito.when(tripService.searchTripsByCoordinates(
                 Mockito.anyDouble(), Mockito.anyDouble(), 
                 Mockito.anyDouble(), Mockito.anyDouble(), 
-                Mockito.anyDouble())).thenReturn(List.of(tripResponse));
+                Mockito.anyDouble(), Mockito.anyString())).thenReturn(List.of(tripResponse));
 
         mockMvc.perform(get("/api/trips/search")
                         .param("depLat", "-33.9")

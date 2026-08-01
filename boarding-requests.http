@@ -1,0 +1,59 @@
+### Shuttle Boarding and QR Seat Assignment Test
+
+### 1. Register a new student
+POST http://localhost:8080/api/auth/student/register
+Content-Type: application/json
+
+{
+  "studentNumber": "20260001",
+  "firstName": "Boarding",
+  "lastName": "Test",
+  "email": "boarding.test@mandela.ac.za",
+  "phone": "0812345678",
+  "password": "Password123",
+  "isFunded": true
+}
+
+> {% client.global.set("student_token", response.body.token); %}
+
+### 2. Login as the student
+POST http://localhost:8080/api/auth/student/login
+Content-Type: application/json
+
+{
+  "email": "boarding.test@mandela.ac.za",
+  "password": "Password123"
+}
+
+> {% client.global.set("student_token", response.body.token); %}
+> {% client.global.set("student_id", response.body.id); %}
+
+### 3. Book a shuttle trip (Assuming Trip ID 1 exists and is a SHUTTLE)
+POST http://localhost:8080/api/shuttle/book/1
+Authorization: Bearer {{student_token}}
+
+> {% client.global.set("booking_id", response.body.bookingId); %}
+
+### 4. Get QR Boarding Token
+GET http://localhost:8080/api/shuttle/booking/{{booking_id}}/qr
+Authorization: Bearer {{student_token}}
+
+> {% 
+    client.global.set("qr_token", response.body.qrToken);
+    client.global.set("qr_expiry", response.body.expiry);
+%}
+
+### 5. Verify and Board (Simulated scan at shuttle entry)
+POST http://localhost:8080/api/shuttle/board
+Content-Type: application/json
+
+{
+  "qrToken": "{{qr_token}}",
+  "bookingId": {{booking_id}},
+  "studentId": {{student_id}},
+  "expiry": "{{qr_expiry}}"
+}
+
+### 6. Search available shuttles (Verification of seat decrement)
+GET http://localhost:8080/api/trips/search?departure=Summerstrand&destination=North Campus
+Authorization: Bearer {{student_token}}
