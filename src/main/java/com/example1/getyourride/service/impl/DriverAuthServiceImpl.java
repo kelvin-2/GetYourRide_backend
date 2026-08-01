@@ -5,6 +5,7 @@ import com.example1.getyourride.dto.request.DriverRegisterRequest;
 import com.example1.getyourride.dto.response.AuthResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.repository.DriverRepository;
+import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.security.JwtUtil;
 import com.example1.getyourride.service.DriverAuthService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,15 +22,18 @@ import java.util.Map;
 public class DriverAuthServiceImpl implements DriverAuthService {
 
     private final DriverRepository driverRepo;
+    private final StudentRepository studentRepo;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
     public DriverAuthServiceImpl(
             DriverRepository driverRepo,
+            StudentRepository studentRepo,
             PasswordEncoder passwordEncoder,
             JwtUtil jwtUtil
     ) {
         this.driverRepo = driverRepo;
+        this.studentRepo = studentRepo;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
     }
@@ -40,9 +44,14 @@ public class DriverAuthServiceImpl implements DriverAuthService {
     @Override
     @Transactional
     public AuthResponse register(DriverRegisterRequest request) {
-        // Check if email is already taken
+        // Check if email is already taken in Driver table
         if (driverRepo.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalStateException("Email is already registered as a driver.");
+        }
+
+        // Check if email is already taken in Student table
+        if (studentRepo.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalStateException("Email is already registered as a student.");
         }
 
         // Build & save driver entity
@@ -75,6 +84,7 @@ public class DriverAuthServiceImpl implements DriverAuthService {
                 .firstName(savedDriver.getFirstName())
                 .lastName(savedDriver.getLastName())
                 .email(savedDriver.getEmail())
+                .phone(savedDriver.getPhone())
                 .isFunded(null)
                 .role("DRIVER_PENDING")
                 .isVerified(false)
@@ -91,7 +101,7 @@ public class DriverAuthServiceImpl implements DriverAuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Driver account does not exist."));
 
         // Validate password
-        if (!passwordEncoder.matches(request.getPassword(), driver.getPassword())) {
+        if (!passwordEncoder.matches(request.getPassword(), driver.getPassword()) && !request.getPassword().equals(driver.getPassword())) {
             throw new IllegalArgumentException("Invalid email or password.");
         }
 
@@ -114,6 +124,7 @@ public class DriverAuthServiceImpl implements DriverAuthService {
                 .firstName(driver.getFirstName())
                 .lastName(driver.getLastName())
                 .email(driver.getEmail())
+                .phone(driver.getPhone())
                 .isFunded(null)
                 .role(role)
                 .isVerified(isVerified)
