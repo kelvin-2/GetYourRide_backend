@@ -1,4 +1,6 @@
-package com.example1.getyourride.service.impl;
+import os
+def write_shuttle_service():
+    content = """package com.example1.getyourride.service.impl;
 
 import com.example1.getyourride.dto.response.BookingResponse;
 import com.example1.getyourride.dto.response.ShuttleBookingSummaryResponse;
@@ -87,14 +89,11 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
         BookingResponse confirmation = new BookingResponse(savedBooking.getBookingId(), trip.getTripId(),
                 savedBooking.getBookingStatus().name(), "Shuttle seat booked successfully!");
 
-        // Fetch user's shuttle trips (all statuses)
-        List<TripResponse> myShuttleTrips = bookingRepository.findByStudent(student).stream()
-                .filter(b -> "SHUTTLE".equalsIgnoreCase(b.getTrip().getTripType()))
-                .map(b -> {
-                    TripResponse resp = mapToTripResponse(b.getTrip());
-                    resp.setBookingStatus(b.getBookingStatus().name());
-                    return resp;
-                })
+        // Fetch user's confirmed shuttles
+        List<TripResponse> myConfirmedShuttles = bookingRepository.findByStudent(student).stream()
+                .map(Booking::getTrip)
+                .filter(t -> "SHUTTLE".equalsIgnoreCase(t.getTripType()))
+                .map(this::mapToTripResponse)
                 .collect(Collectors.toList());
 
         // Fetch all shuttle trips
@@ -104,7 +103,7 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
 
         return ShuttleBookingSummaryResponse.builder()
                 .bookingConfirmation(confirmation)
-                .myShuttleTrips(myShuttleTrips)
+                .myConfirmedShuttles(myConfirmedShuttles)
                 .allShuttleTrips(allShuttleTrips)
                 .build();
     }
@@ -132,15 +131,6 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
                     .vehicleModel(trip.getVehicle().getModel())
                     .vehicleColour(trip.getVehicle().getColour())
                     .vehicleCapacity(trip.getVehicle().getCapacity());
-        }
-
-        if (trip.getRoute() != null) {
-            builder.routeName(trip.getRoute().getRouteName());
-        }
-
-        if (trip.getTimeSlot() != null) {
-            String slotStr = trip.getTimeSlot().getDeparts() + " - " + trip.getTimeSlot().getArrives();
-            builder.slotTime(slotStr);
         }
 
         if (trip.getStops() != null) {
@@ -196,3 +186,8 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
                 booking.getBookingStatus().name(), "Boarding successful!");
     }
 }
+"""
+    with open('src/main/java/com/example1/getyourride/service/impl/ShuttleBookingServiceImpl.java', 'w', encoding='utf-8') as f:
+        f.write(content)
+
+write_shuttle_service()

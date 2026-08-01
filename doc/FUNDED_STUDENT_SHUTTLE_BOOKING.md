@@ -27,15 +27,18 @@ When a booking is initiated at `POST /api/shuttle/book/{tripId}`:
 Upon successful booking, the API returns a `ShuttleBookingSummaryResponse` containing:
 
 - `bookingConfirmation`: Details of the newly created booking.
-- `myConfirmedShuttles`: A list of all shuttle trips that this user has successfully booked.
-- `allShuttleTrips`: A list of all available shuttle trips in the system, allowing the frontend to refresh the view immediately.
+- `myShuttleTrips`: A list of all shuttle trips that this user has booked (Confirmed, Boarded, Cancelled, etc.), including `routeName`, `slotTime`, and `bookingStatus`.
+- `allShuttleTrips`: A list of all available shuttle trips in the system, refreshed with route and slot info.
 
 ### 3. Viewing User Trips
 
 Students can view all their booked trips (both Carpool and Shuttle) via:
-`GET /api/trips/my`
+`GET /api/trips/my-trips`
 
-This endpoint has been enhanced to support both Drivers (returning trips they are driving) and Students (returning trips they have booked).
+This endpoint has been enhanced to:
+- Return `bookingStatus` for passenger trips.
+- Include `routeName` and `slotTime` for shuttle trips.
+- Show both scheduled and cancelled trips.
 
 ## How to Test
 

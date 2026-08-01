@@ -13,6 +13,6 @@ import java.util.List;
 @AllArgsConstructor
 public class ShuttleBookingSummaryResponse {
     private BookingResponse bookingConfirmation;
-    private List<TripResponse> myConfirmedShuttles;
+    private List<TripResponse> myShuttleTrips;
     private List<TripResponse> allShuttleTrips;
 }

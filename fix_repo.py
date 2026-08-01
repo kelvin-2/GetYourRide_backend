@@ -1,4 +1,6 @@
-package com.example1.getyourride.repository;
+import os
+def write_repo():
+    content = """package com.example1.getyourride.repository;
 
 import com.example1.getyourride.entity.Trip;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -69,3 +71,8 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @org.springframework.data.jpa.repository.Query("SELECT DISTINCT t FROM Trip t JOIN t.stops s WHERE s.student.studentId = :studentId")
     List<Trip> findTripsByStudentInStops(@org.springframework.data.repository.query.Param("studentId") Long studentId);
 }
+"""
+    with open('src/main/java/com/example1/getyourride/repository/TripRepository.java', 'w', encoding='utf-8') as f:
+        f.write(content)
+
+write_repo()

@@ -87,6 +87,7 @@ class ShuttleBookingServiceImplTest {
         assertNotNull(response);
         assertNotNull(response.getBookingConfirmation());
         assertEquals(10L, response.getBookingConfirmation().getBookingId());
+        assertNotNull(response.getMyShuttleTrips());
         verify(tripRepository).save(trip);
         verify(bookingRepository).save(any());
     }

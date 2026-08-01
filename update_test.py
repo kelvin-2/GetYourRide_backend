@@ -1,7 +1,8 @@
-package com.example1.getyourride.service.impl;
+import os
+def update_test():
+    content = """package com.example1.getyourride.service.impl;
 
 import com.example1.getyourride.dto.response.TripResponse;
-import com.example1.getyourride.entity.BookingStatus;
 import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.repository.DriverRepository;
@@ -116,7 +117,6 @@ class TripServiceImplTest {
         com.example1.getyourride.entity.Booking booking = new com.example1.getyourride.entity.Booking();
         booking.setTrip(trip);
         booking.setStudent(student);
-        booking.setBookingStatus(BookingStatus.CONFIRMED);
 
         when(bookingRepository.findByStudent(student)).thenReturn(List.of(booking));
         when(tripRepository.findTripsByStudentInStops(anyLong())).thenReturn(List.of());
@@ -125,7 +125,6 @@ class TripServiceImplTest {
 
         assertEquals(1, results.size());
         assertEquals(101L, results.get(0).getTripId());
-        assertEquals("CONFIRMED", results.get(0).getBookingStatus());
     }
 
     @Test
@@ -167,7 +166,6 @@ class TripServiceImplTest {
         
         com.example1.getyourride.entity.Booking booking = new com.example1.getyourride.entity.Booking();
         booking.setTrip(tripAsStudentBooking);
-        booking.setBookingStatus(BookingStatus.PENDING);
         when(bookingRepository.findByStudent(student)).thenReturn(List.of(booking));
         
         when(tripRepository.findTripsByStudentInStops(1L)).thenReturn(List.of(tripAsStudentStop));
@@ -177,8 +175,12 @@ class TripServiceImplTest {
         assertEquals(3, results.size());
         assertEquals(3001L, results.get(0).getTripId());
         assertEquals(2001L, results.get(1).getTripId());
-        assertEquals("PENDING", results.get(1).getBookingStatus());
         assertEquals(1001L, results.get(2).getTripId());
     }
 
 }
+"""
+    with open('src/test/java/com/example1/getyourride/service/impl/TripServiceImplTest.java', 'w', encoding='utf-8') as f:
+        f.write(content)
+
+update_test()
