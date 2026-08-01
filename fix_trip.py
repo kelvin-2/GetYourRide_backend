@@ -1,4 +1,6 @@
-package com.example1.getyourride.service.impl;
+import os
+def write_trip_service():
+    content = """package com.example1.getyourride.service.impl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -400,15 +402,6 @@ public class TripServiceImpl implements TripService {
                     .vehicleCapacity(trip.getVehicle().getCapacity());
         }
 
-        if (trip.getRoute() != null) {
-            builder.routeName(trip.getRoute().getRouteName());
-        }
-
-        if (trip.getTimeSlot() != null) {
-            String slotStr = trip.getTimeSlot().getDeparts() + " - " + trip.getTimeSlot().getArrives();
-            builder.slotTime(slotStr);
-        }
-
         return builder
                 .tripType(trip.getTripType())
                 .departureStop(trip.getDepartureStop())
@@ -440,43 +433,41 @@ public class TripServiceImpl implements TripService {
     @Override
     @Transactional(readOnly = true)
     public List<TripResponse> getMyTrips(String email) {
-        List<TripResponse> results = new ArrayList<>();
+        List<Trip> tripsAsDriver = new ArrayList<>();
+        List<Trip> tripsAsStudent = new ArrayList<>();
 
         Optional<Driver> driverOpt = driverRepository.findByEmail(email);
         if (driverOpt.isPresent()) {
-            List<Trip> tripsAsDriver = tripRepository.findByDriverDriverIdOrderByDepartureTimeDesc(driverOpt.get().getDriverId());
-            results.addAll(tripsAsDriver.stream()
-                    .map(this::mapToResponse)
-                    .collect(Collectors.toList()));
+            tripsAsDriver = tripRepository.findByDriverDriverIdOrderByDepartureTimeDesc(driverOpt.get().getDriverId());
         }
 
         Optional<Student> studentOpt = studentRepository.findByEmail(email);
         if (studentOpt.isPresent()) {
             Student student = studentOpt.get();
-            // Formal bookings (mostly Shuttles)
-            List<Booking> studentBookings = bookingRepository.findByStudent(student);
-            for (Booking booking : studentBookings) {
-                TripResponse resp = mapToResponse(booking.getTrip());
-                resp.setBookingStatus(booking.getBookingStatus().name());
-                results.add(resp);
-            }
-
-            // Carpool stops
-            List<Trip> carpoolTrips = tripRepository.findTripsByStudentInStops(student.getStudentId());
-            for (Trip trip : carpoolTrips) {
-                boolean alreadyAdded = results.stream().anyMatch(r -> r.getTripId().equals(trip.getTripId()));
-                if (!alreadyAdded) {
-                    results.add(mapToResponse(trip));
-                }
-            }
+            tripsAsStudent.addAll(bookingRepository.findByStudent(student).stream()
+                    .map(Booking::getTrip)
+                    .collect(Collectors.toList()));
+            
+            tripsAsStudent.addAll(tripRepository.findTripsByStudentInStops(student.getStudentId()));
         }
 
         if (!driverOpt.isPresent() && !studentOpt.isPresent()) {
             throw new ResourceNotFoundException("User not found with email: " + email);
         }
 
-        return results.stream()
+        List<Trip> allTrips = new ArrayList<>();
+        allTrips.addAll(tripsAsDriver);
+        allTrips.addAll(tripsAsStudent);
+
+        return allTrips.stream()
+                .distinct()
+                .map(this::mapToResponse)
                 .sorted(Comparator.comparing(TripResponse::getDepartureTime).reversed())
                 .collect(Collectors.toList());
     }
 }
+"""
+    with open('src/main/java/com/example1/getyourride/service/impl/TripServiceImpl.java', 'w', encoding='utf-8') as f:
+        f.write(content)
+
+write_trip_service()

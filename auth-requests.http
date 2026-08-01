@@ -187,3 +187,11 @@ Authorization: Bearer {{alice_token}}
 ### Get all shuttle time slots (student, authenticated)
 GET http://localhost:8080/api/shuttle-stops/time-slots
 Authorization: Bearer {{student_token}}
+
+### Book a Shuttle (Funded Student - Alice)
+POST http://localhost:8080/api/shuttle/book/1
+Authorization: Bearer {{alice_token}}
+
+### Get My Trips (Student - Alice)
+GET http://localhost:8080/api/trips/my-trips
+Authorization: Bearer {{alice_token}}

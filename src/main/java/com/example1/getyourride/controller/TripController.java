@@ -149,14 +149,17 @@ public class TripController {
             @RequestParam(required = false) Double depLng,
             @RequestParam(required = false) Double destLat,
             @RequestParam(required = false) Double destLng,
-            @RequestParam(defaultValue = "2.0") Double radius) {
+            @RequestParam(defaultValue = "2.0") Double radius,
+            Authentication authentication) {
+        
+        String email = authentication != null ? authentication.getName() : null;
         
         if (depLat != null && depLng != null && destLat != null && destLng != null) {
-            return ResponseEntity.ok(tripService.searchTripsByCoordinates(depLat, depLng, destLat, destLng, radius));
+            return ResponseEntity.ok(tripService.searchTripsByCoordinates(depLat, depLng, destLat, destLng, radius, email));
         }
         
         if (departure != null && destination != null) {
-            return ResponseEntity.ok(tripService.searchTrips(departure, destination));
+            return ResponseEntity.ok(tripService.searchTrips(departure, destination, email));
         }
 
         return ResponseEntity.badRequest().build();

@@ -89,9 +89,10 @@ public interface TripService {
      * Search for trips by departure and destination stops.
      * @param departure Departure stop address or keyword.
      * @param destination Destination stop address or keyword.
+     * @param studentEmail Email of the student searching (to check funding).
      * @return List of matching trips.
      */
-    List<TripResponse> searchTrips(String departure, String destination);
+    List<TripResponse> searchTrips(String departure, String destination, String studentEmail);
 
     /**
      * Search for trips by departure and destination coordinates.
@@ -100,9 +101,10 @@ public interface TripService {
      * @param destLat Destination latitude.
      * @param destLng Destination longitude.
      * @param radiusInKm Radius in kilometers to search within.
+     * @param studentEmail Email of the student searching (to check funding).
      * @return List of matching trips.
      */
     
-    List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm);
+    List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm, String studentEmail);
     List<TripResponse> getMyTrips(String email);
 }

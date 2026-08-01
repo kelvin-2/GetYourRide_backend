@@ -35,7 +35,12 @@ public class TripResponse {
     private Integer availableSeats;
     private BigDecimal price;
     private String status;
+    private String bookingStatus;
+    private String routeName;
+    private String slotTime;
     private long studentId;
     private String studentName;
+    private Double pickupDistance;
+    private Double dropOffDistance;
     private List<TripStopResponse> stops;
 }
