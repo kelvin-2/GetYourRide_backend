@@ -13,4 +13,7 @@ import java.util.Optional;
 public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStudent(Student student);
     Optional<Booking> findByTripAndStudent(Trip trip, Student student);
+
+    // Find all bookings for a specific trip (used by boarding screen)
+    List<Booking> findByTrip(Trip trip);
 }

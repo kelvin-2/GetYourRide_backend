@@ -20,4 +20,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 
     // Derived Spring Data query matching driver.driverId field hierarchy
     List<Vehicle> findByDriverDriverId(Long driverId);
+
+    // Returns the first vehicle assigned to this driver (for shuttle driver profile)
+    Optional<Vehicle> findFirstByDriverDriverId(Long driverId);
 }

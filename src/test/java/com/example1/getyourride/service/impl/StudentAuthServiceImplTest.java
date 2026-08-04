@@ -3,6 +3,7 @@ package com.example1.getyourride.service.impl;
 import com.example1.getyourride.dto.request.StudentLoginRequest;
 import com.example1.getyourride.dto.request.StudentRegisterRequest;
 import com.example1.getyourride.dto.response.AuthResponse;
+import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
@@ -14,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -173,6 +175,33 @@ class StudentAuthServiceImplTest {
         assertEquals("token", response.getToken());
     }
     
+    @Test
+    void login_ShuttleDriver_ReturnsShuttleDriverTypeForBoardingRoute() {
+        StudentLoginRequest request = new StudentLoginRequest();
+        request.setEmail("shuttle.driver@mandela.ac.za");
+        request.setPassword("password");
+
+        Driver shuttleDriver = new Driver();
+        shuttleDriver.setDriverId(4L);
+        shuttleDriver.setEmail(request.getEmail());
+        shuttleDriver.setPassword("encodedPassword");
+        shuttleDriver.setFirstName("Shuttle");
+        shuttleDriver.setLastName("Driver");
+        shuttleDriver.setRole("SHUTTLE_DRIVER");
+        shuttleDriver.setIsVerified(true);
+
+        when(studentRepo.findByEmail(request.getEmail())).thenReturn(Optional.empty());
+        when(driverRepo.findByEmail(request.getEmail())).thenReturn(Optional.of(shuttleDriver));
+        when(passwordEncoder.matches(request.getPassword(), shuttleDriver.getPassword())).thenReturn(true);
+        when(jwtUtil.generateToken(4L, request.getEmail(), "SHUTTLE_DRIVER", anyMap())).thenReturn("token");
+
+        AuthResponse response = studentAuthService.login(request);
+
+        assertEquals("SHUTTLE_DRIVER", response.getType());
+        assertEquals("SHUTTLE_DRIVER", response.getRole());
+        verify(jwtUtil).generateToken(4L, request.getEmail(), "SHUTTLE_DRIVER", Map.of("role", "SHUTTLE_DRIVER"));
+    }
+
     @Test
     void login_UserNotFound() {
         StudentLoginRequest request = new StudentLoginRequest();

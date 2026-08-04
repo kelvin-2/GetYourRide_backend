@@ -141,18 +141,29 @@ public class StudentAuthServiceImpl implements StudentAuthService {
             }
 
             boolean isVerified = Boolean.TRUE.equals(driver.getIsVerified());
-            String role = isVerified ? "DRIVER_APPROVED" : "DRIVER_PENDING";
+            boolean isShuttleDriver = "SHUTTLE_DRIVER".equalsIgnoreCase(driver.getRole());
+            if (isShuttleDriver && !isVerified) {
+                throw new SecurityException("Account not verified. Contact admin.");
+            }
+
+            // The mobile client uses type to choose its first screen. Keep shuttle drivers
+            // distinct from student drivers so they are routed to boarding, not the
+            // student-driver profile.
+            String type = isShuttleDriver ? "SHUTTLE_DRIVER" : "DRIVER";
+            String role = isShuttleDriver
+                    ? "SHUTTLE_DRIVER"
+                    : (isVerified ? "DRIVER_APPROVED" : "DRIVER_PENDING");
 
             String token = jwtUtil.generateToken(
                     driver.getDriverId(),
                     driver.getEmail(),
-                    "DRIVER",
+                    type,
                     Map.of("role", role)
             );
 
             return AuthResponse.builder()
                     .token(token)
-                    .type("DRIVER")
+                    .type(type)
                     .id(driver.getDriverId())
                     .firstName(driver.getFirstName())
                     .lastName(driver.getLastName())

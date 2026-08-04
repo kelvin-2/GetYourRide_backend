@@ -21,4 +21,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
 
     // Fetch drivers by role (e.g. "STUDENT_DRIVER" vs "SHUTTLE_DRIVER")
     List<Driver> findByRole(String role);
+
+    // Shuttle driver login — matches by email AND role so student drivers can't use this endpoint
+    Optional<Driver> findByEmailAndRole(String email, String role);
 }
