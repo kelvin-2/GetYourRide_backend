@@ -25,7 +25,7 @@ public class Vehicle {
     @JoinColumn(name = "driver_id", nullable = false)
     private Driver driver;
 
-    @Column(name = "registration_number", nullable = false, unique = true)
+    @Column(name = "registration_number", nullable = false, unique = true, length = 20)
     private String registrationNumber;
 
     @Column(name = "model")

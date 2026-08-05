@@ -23,7 +23,7 @@ public class Booking {
     @Column(name = "booking_date")
     private LocalDateTime bookingDate;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = BookingStatusConverter.class)
     @Column(name = "booking_status")
     private BookingStatus bookingStatus;
 

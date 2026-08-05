@@ -68,4 +68,13 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 
     @org.springframework.data.jpa.repository.Query("SELECT DISTINCT t FROM Trip t JOIN t.stops s WHERE s.student.studentId = :studentId")
     List<Trip> findTripsByStudentInStops(@org.springframework.data.repository.query.Param("studentId") Long studentId);
+
+    // --- Shuttle driver profile queries ---
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(t) FROM Trip t WHERE t.driver.driverId = :driverId AND UPPER(t.status) = :status")
+    int countByDriverIdAndStatus(@org.springframework.data.repository.query.Param("driverId") Long driverId,
+                                 @org.springframework.data.repository.query.Param("status") String status);
+
+    @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE t.driver.driverId = :driverId AND UPPER(t.status) IN ('SCHEDULED', 'IN_PROGRESS', 'CONFIRMED') ORDER BY t.departureTime DESC")
+    List<Trip> findActiveTrips(@org.springframework.data.repository.query.Param("driverId") Long driverId);
 }

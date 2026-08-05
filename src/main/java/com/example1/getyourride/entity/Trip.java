@@ -29,7 +29,8 @@ public class Trip {
     private Driver driver;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "registration_number", referencedColumnName = "registration_number", nullable = false)
+    @JoinColumn(name = "registration_number", referencedColumnName = "registration_number", nullable = false,
+            columnDefinition = "varchar(20)")
     private Vehicle vehicle;
 
     @Column(name = "trip_type", nullable = false)

@@ -93,6 +93,8 @@ public class DriverAuthServiceImpl implements DriverAuthService {
 
     /**
      * Authenticates a driver directly via driver-specific login endpoint.
+     * If the driver's role is SHUTTLE_DRIVER, returns type = "SHUTTLE_DRIVER"
+     * so the Android app routes to the shuttle/boarding home screen.
      */
     @Override
     @Transactional(readOnly = true)
@@ -107,24 +109,38 @@ public class DriverAuthServiceImpl implements DriverAuthService {
 
         // Null-safe boolean verification check
         boolean isVerified = Boolean.TRUE.equals(driver.getIsVerified());
-        String role = isVerified ? "DRIVER_APPROVED" : "DRIVER_PENDING";
+
+        // Determine type and role based on the driver's actual role in the database
+        String type;
+        String role;
+        if ("SHUTTLE_DRIVER".equals(driver.getRole())) {
+            if (!isVerified) {
+                throw new SecurityException("Account not verified. Contact admin.");
+            }
+            type = "SHUTTLE_DRIVER";
+            role = "SHUTTLE_DRIVER";
+        } else {
+            type = "DRIVER";
+            role = isVerified ? "DRIVER_APPROVED" : "DRIVER_PENDING";
+        }
 
         // Generate JWT token
         String token = jwtUtil.generateToken(
                 driver.getDriverId(),
                 driver.getEmail(),
-                "DRIVER",
+                type,
                 Map.of("role", role)
         );
 
         return AuthResponse.builder()
                 .token(token)
-                .type("DRIVER")
+                .type(type)
                 .id(driver.getDriverId())
                 .firstName(driver.getFirstName())
                 .lastName(driver.getLastName())
                 .email(driver.getEmail())
                 .phone(driver.getPhone())
+                .studentNumber("")
                 .isFunded(null)
                 .role(role)
                 .isVerified(isVerified)
