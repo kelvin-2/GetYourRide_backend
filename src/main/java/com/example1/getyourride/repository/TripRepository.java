@@ -77,4 +77,9 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 
     @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE t.driver.driverId = :driverId AND UPPER(t.status) IN ('SCHEDULED', 'IN_PROGRESS', 'CONFIRMED') ORDER BY t.departureTime DESC")
     List<Trip> findActiveTrips(@org.springframework.data.repository.query.Param("driverId") Long driverId);
+
+    // Delete all trips for a driver (used for cascade deletion of driver profile)
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Trip t WHERE t.driver.driverId = :driverId")
+    void deleteByDriverId(@org.springframework.data.repository.query.Param("driverId") Long driverId);
 }

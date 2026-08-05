@@ -1,7 +1,11 @@
 package com.example1.getyourride.repository;
 
+import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -23,4 +27,9 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 
     // Returns the first vehicle assigned to this driver (for shuttle driver profile)
     Optional<Vehicle> findFirstByDriverDriverId(Long driverId);
+
+    // Delete all vehicles assigned to a driver (used for cascade deletion)
+    @Modifying
+    @Query("DELETE FROM Vehicle v WHERE v.driver = :driver")
+    void deleteByDriver(@Param("driver") Driver driver);
 }

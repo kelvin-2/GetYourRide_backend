@@ -270,6 +270,51 @@ public class ShuttleDriverService {
                 .build();
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // DELETE PROFILE
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Delete a shuttle driver's profile and all associated data.
+     * Cascade order:
+     * 1. Boarding logs (for all bookings on the driver's trips)
+     * 2. Bookings (for all the driver's trips)
+     * 3. Trip stops (auto-cascaded by JPA via Trip entity)
+     * 4. Trips
+     * 5. Vehicles
+     * 6. Driver
+     */
+    @Transactional
+    public void deleteProfile(Long driverId) {
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new IllegalArgumentException("Driver not found with ID: " + driverId));
+
+        // 1. Get all trips for this driver
+        List<Trip> driverTrips = tripRepository.findByDriverDriverId(driverId);
+
+        if (!driverTrips.isEmpty()) {
+            // 2. Get all bookings for those trips
+            List<Booking> tripBookings = bookingRepository.findByTripIn(driverTrips);
+
+            if (!tripBookings.isEmpty()) {
+                // 3. Delete all boarding logs for those bookings
+                boardingLogRepository.deleteByBookingIn(tripBookings);
+
+                // 4. Delete all bookings for those trips
+                bookingRepository.deleteByTripIn(driverTrips);
+            }
+
+            // 5. Delete all trips (trip_stops cascade automatically via CascadeType.ALL)
+            tripRepository.deleteByDriverId(driverId);
+        }
+
+        // 6. Delete all vehicles assigned to this driver
+        vehicleRepository.deleteByDriver(driver);
+
+        // 7. Delete the driver record
+        driverRepository.delete(driver);
+    }
+
     /**
      * Helper to format LocalDateTime as a readable string (HH:mm).
      */
