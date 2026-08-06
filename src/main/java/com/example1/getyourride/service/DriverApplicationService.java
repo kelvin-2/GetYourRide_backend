@@ -76,7 +76,7 @@ public class DriverApplicationService {
         driver.setEmail(normalizedEmail);
         driver.setPhone(request.getContactNumber());
         driver.setStudentNumber(request.getStudentNumber());
-        driver.setPassword(passwordEncoder.encode(request.getPassword()));
+        driver.setPassword(request.getPassword());
         driver.setRole("STUDENT_DRIVER");
         driver.setIsVerified(false);
         driver.setJoinDate(LocalDate.now());

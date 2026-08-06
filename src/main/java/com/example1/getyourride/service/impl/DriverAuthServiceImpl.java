@@ -63,7 +63,7 @@ public class DriverAuthServiceImpl implements DriverAuthService {
                 .role("STUDENT_DRIVER")
                 .isVerified(false)
                 .joinDate(LocalDate.now())
-                .password(passwordEncoder.encode(request.getPassword()))
+                .password(request.getPassword())
                 .totalTrips(0)
                 .build();
 

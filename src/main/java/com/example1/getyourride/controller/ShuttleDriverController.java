@@ -98,4 +98,26 @@ public class ShuttleDriverController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+
+    /**
+     * DELETE /api/shuttle-driver/profile/{driverId}
+     *
+     * Deletes a shuttle driver's profile and all associated data:
+     * - Boarding logs
+     * - Bookings
+     * - Trips (and their stops)
+     * - Vehicles
+     * - Driver record
+     *
+     * This is a permanent, irreversible operation.
+     */
+    @DeleteMapping("/shuttle-driver/profile/{driverId}")
+    public ResponseEntity<?> deleteProfile(@PathVariable Long driverId) {
+        try {
+            shuttleDriverService.deleteProfile(driverId);
+            return ResponseEntity.ok("Driver profile and all associated data deleted successfully");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
 }
