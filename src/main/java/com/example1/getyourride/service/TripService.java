@@ -1,12 +1,13 @@
 package com.example1.getyourride.service;
 
+import java.util.List;
+
 import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
 import com.example1.getyourride.dto.request.OfferRideRequest;
 import com.example1.getyourride.dto.response.OfferRideResponse;
+import com.example1.getyourride.dto.response.TripBookingResponse;
 import com.example1.getyourride.dto.response.TripResponse;
-
-import java.util.List;
 
 /**
  * Service interface for managing Trips.
@@ -54,7 +55,7 @@ public interface TripService {
      * @param status The status filter.
      * @return List of trips with the matching status.
      */
-    List<TripResponse> getTripsByStatus(String status);
+    List<TripResponse> getTripsByStatus(String status,String studentEmail);
     
     /**
      * Updates the status of a trip.
@@ -107,4 +108,26 @@ public interface TripService {
     
     List<TripResponse> searchTripsByCoordinates(Double depLat, Double depLng, Double destLat, Double destLng, Double radiusInKm, String studentEmail);
     List<TripResponse> getMyTrips(String email);
+
+    // --- CHANGED (Phase 4 — booking wiring): new booking-specific operations ---
+
+    /**
+     * Cancels the authenticated student's booking on a given trip.
+     *
+     * <p>CHANGED: The Android client sends the tripId (not the bookingId) because that is what it
+     * has on screen. The backend resolves the booking from (tripId + authenticated student email).
+     *
+     * @param tripId The trip the student wants to cancel their booking on.
+     * @return The updated trip with the booking status set to CANCELLED.
+     */
+    TripResponse cancelBooking(Long tripId);
+
+    /**
+     * Returns bookings for the authenticated student, optionally filtered by booking_status.
+     *
+     * @param email  The student's email from the JWT.
+     * @param status Optional filter: "CONFIRMED", "CANCELLED", "PENDING". Null means all.
+     * @return Booking records ordered by booking date descending.
+     */
+    List<TripBookingResponse> getMyBookings(String email, String status);
 }

@@ -42,6 +42,10 @@ public class Student {
     @Column(name = "is_funded", nullable = false)
     private Boolean isFunded = false;
 
+    public boolean isFunded() {
+        return isFunded;
+    }
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
