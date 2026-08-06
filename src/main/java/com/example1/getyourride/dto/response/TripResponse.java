@@ -1,11 +1,14 @@
 package com.example1.getyourride.dto.response;
 
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-
 import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Response DTO for Trip details.
@@ -35,6 +38,13 @@ public class TripResponse {
     private Integer availableSeats;
     private BigDecimal price;
     private String status;
+
+    /**
+     * CHANGED (Phase 4 — booking wiring): added bookingId so the frontend can reference the
+     * booking row directly (e.g. to cancel it) without a separate lookup.
+     */
+    private Long bookingId;
+
     private String bookingStatus;
     private String routeName;
     private String slotTime;

@@ -4,13 +4,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,9 +22,11 @@ import com.example1.getyourride.dto.request.OfferRideRequest;
 import com.example1.getyourride.dto.request.TripStopRequest;
 import com.example1.getyourride.dto.response.GeocodeResponse;
 import com.example1.getyourride.dto.response.OfferRideResponse;
+import com.example1.getyourride.dto.response.TripBookingResponse;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.dto.response.TripStopResponse;
 import com.example1.getyourride.entity.Booking;
+import com.example1.getyourride.entity.BookingStatus;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.entity.Trip;
@@ -196,6 +196,14 @@ public class TripServiceImpl implements TripService {
         Student student = studentRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with email: " + email));
 
+        // CHANGED (Phase 4 — booking wiring): prevent the same student from booking the same trip twice.
+        // Without this check a double-tap on the book button silently creates a duplicate trip_booking row
+        // and decrements available seats a second time.
+        Optional<Booking> existingBooking = bookingRepository.findByTripAndStudent(trip, student);
+        if (existingBooking.isPresent() && existingBooking.get().getBookingStatus() != BookingStatus.CANCELLED) {
+            throw new BadRequestException("You have already booked this trip");
+        }
+
         if (log.isDebugEnabled()) {
             log.debug("POST /api/trips/{}/book received pickup={} dropOff={}",
                     tripId, describe(request.getPickupStop()), describe(request.getDropOffStop()));
@@ -225,7 +233,34 @@ public class TripServiceImpl implements TripService {
         trip.setStatus("SCHEDULED");
 
         Trip savedTrip = tripRepository.save(trip);
-        return mapToResponse(savedTrip);
+
+        // CHANGED (Phase 4 — booking wiring): record the booking in trip_booking so it appears
+        // in the student's booking history and can be cancelled independently of the trip itself.
+        // Status is CONFIRMED because the student actively chose this trip — there is no approval
+        // step for carpools (unlike shuttles which may go through Pending first).
+        Booking booking;
+        if (existingBooking.isPresent()) {
+            // Re-booking after a cancellation: reuse the row rather than creating a duplicate.
+            booking = existingBooking.get();
+            booking.setBookingStatus(BookingStatus.CONFIRMED);
+            booking.setBookingDate(LocalDateTime.now());
+        } else {
+            booking = new Booking();
+            booking.setTrip(savedTrip);
+            booking.setStudent(student);
+            booking.setBookingDate(LocalDateTime.now());
+            booking.setBookingStatus(BookingStatus.CONFIRMED);
+        }
+        Booking savedBooking = bookingRepository.save(booking);
+
+        log.info("Student {} booked trip {} — booking_id={}", student.getStudentId(), tripId, savedBooking.getBookingId());
+
+        // CHANGED (Phase 4 — booking wiring): attach booking details to the response so the
+        // frontend immediately has the booking id (for cancel) and status (for UI badges).
+        TripResponse response = mapToResponse(savedTrip);
+        response.setBookingId(savedBooking.getBookingId());
+        response.setBookingStatus(savedBooking.getBookingStatus().name());
+        return response;
     }
 
     @Override
@@ -246,8 +281,12 @@ public class TripServiceImpl implements TripService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TripResponse> getTripsByStatus(String status) {
+    public List<TripResponse> getTripsByStatus(String status, String email) {
+        boolean isDriver = driverRepository.findByEmail(email).isPresent();
+        boolean isFunded = isDriver || isStudentFunded(email);
+
         return tripRepository.findByStatus(status).stream()
+                .filter(trip -> isFunded || !"SHUTTLE".equalsIgnoreCase(trip.getTripType()))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -457,6 +496,9 @@ public class TripServiceImpl implements TripService {
             List<Booking> studentBookings = bookingRepository.findByStudent(student);
             for (Booking booking : studentBookings) {
                 TripResponse resp = mapToResponse(booking.getTrip());
+                // CHANGED (Phase 4 — booking wiring): also set bookingId so the frontend can
+                // cancel from the my-trips view without a separate lookup.
+                resp.setBookingId(booking.getBookingId());
                 resp.setBookingStatus(booking.getBookingStatus().name());
                 results.add(resp);
             }
@@ -477,6 +519,109 @@ public class TripServiceImpl implements TripService {
 
         return results.stream()
                 .sorted(Comparator.comparing(TripResponse::getDepartureTime).reversed())
+                .collect(Collectors.toList());
+    }
+
+    // =========================================================================
+    // CHANGED (Phase 4 — booking wiring): new methods for booking management
+    // =========================================================================
+
+    /**
+     * Cancels a student's booking and restores the seat to the trip.
+     *
+     * <p>The student can only cancel their own booking — ownership is verified via the JWT email.
+     * Cancelling a booking that is already CANCELLED is a no-op (idempotent) rather than an error,
+     * so a retry from a flaky network does not confuse the user.
+     *
+     * <p>Available seats are incremented back on the trip because the seat was decremented in
+     * bookCarpool. Without this, a cancelled booking permanently consumes a seat.
+     */
+    /**
+     * CHANGED: The frontend sends tripId (not bookingId) because that is what the student sees
+     * on screen. We look up the booking from (tripId + authenticated student email), then cancel it.
+     */
+    @Override
+    @Transactional
+    public TripResponse cancelBooking(Long tripId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Student student = studentRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found with email: " + email));
+
+        Booking booking = bookingRepository.findByTripAndStudent(trip, student)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No booking found for student " + email + " on trip " + tripId));
+
+        // Idempotent: if already cancelled, just return current state.
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            TripResponse response = mapToResponse(trip);
+            response.setBookingId(booking.getBookingId());
+            response.setBookingStatus(BookingStatus.CANCELLED.name());
+            return response;
+        }
+
+        booking.setBookingStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+
+        // Restore the seat that was decremented in bookCarpool.
+        trip.setAvailableSeats(trip.getAvailableSeats() + 1);
+        tripRepository.save(trip);
+
+        log.info("Student {} cancelled booking for trip {} (booking_id={})",
+                student.getStudentId(), tripId, booking.getBookingId());
+
+        TripResponse response = mapToResponse(trip);
+        response.setBookingId(booking.getBookingId());
+        response.setBookingStatus(BookingStatus.CANCELLED.name());
+        return response;
+    }
+
+    /**
+     * Returns every booking the authenticated student has made, newest first.
+     *
+     * <p>Each entry carries its booking status so the frontend can filter:
+     * - "Confirmed" → active upcoming rides
+     * - "Cancelled" → past cancellations (history)
+     * - "Pending" → awaiting driver confirmation (shuttles)
+     *
+     * <p>The trip details are nested inside each response so the client does not need a follow-up
+     * GET per trip to render the list.
+     */
+    /**
+     * CHANGED: Added optional status filter so the frontend can fetch only CONFIRMED bookings
+     * for the "oncoming" screen, and only CANCELLED for the history screen, without needing to
+     * download everything and filter client-side.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<TripBookingResponse> getMyBookings(String email, String status) {
+        Student student = studentRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found with email: " + email));
+
+        List<Booking> bookings = bookingRepository.findByStudent(student);
+
+        // If a status filter was provided, only return bookings matching that status.
+        // Case-insensitive so the client can send "confirmed", "CONFIRMED", or "Confirmed".
+        if (status != null && !status.isBlank()) {
+            String normalised = status.trim().toUpperCase();
+            bookings = bookings.stream()
+                    .filter(b -> b.getBookingStatus() != null
+                            && b.getBookingStatus().name().equals(normalised))
+                    .collect(Collectors.toList());
+        }
+
+        return bookings.stream()
+                .sorted(Comparator.comparing(
+                        (Booking b) -> b.getBookingDate() != null ? b.getBookingDate() : LocalDateTime.MIN)
+                        .reversed())
+                .map(booking -> TripBookingResponse.builder()
+                        .bookingId(booking.getBookingId())
+                        .trip(mapToResponse(booking.getTrip()))
+                        .bookingDate(booking.getBookingDate())
+                        .bookingStatus(booking.getBookingStatus() != null ? booking.getBookingStatus().name() : null)
+                        .build())
                 .collect(Collectors.toList());
     }
 }

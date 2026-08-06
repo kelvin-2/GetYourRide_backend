@@ -1,21 +1,27 @@
 package com.example1.getyourride.controller;
 
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.example1.getyourride.dto.request.BookCarpoolRequest;
 import com.example1.getyourride.dto.request.CreateTripRequest;
-import com.example1.getyourride.dto.response.TripResponse;
-import com.example1.getyourride.entity.Student;
-import com.example1.getyourride.entity.Trip;
-import com.example1.getyourride.exception.ResourceNotFoundException;
-import com.example1.getyourride.service.TripService;
-import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import com.example1.getyourride.dto.request.OfferRideRequest;
 import com.example1.getyourride.dto.response.OfferRideResponse;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
+import com.example1.getyourride.dto.response.TripBookingResponse;
+import com.example1.getyourride.dto.response.TripResponse;
+import com.example1.getyourride.service.TripService;
 
-import java.util.List;
+import jakarta.validation.Valid;
 
 /**
  * Controller for managing Trips.
@@ -80,8 +86,11 @@ public class TripController {
      * @return List of matching trips.
      */
     @GetMapping("/status/{status}")
-    public ResponseEntity<List<TripResponse>> getTripsByStatus(@PathVariable String status) {
-        return ResponseEntity.ok(tripService.getTripsByStatus(status));
+    public ResponseEntity<List<TripResponse>> getTripsByStatus(
+            @PathVariable String status,
+            Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : null;
+        return ResponseEntity.ok(tripService.getTripsByStatus(status, email));
     }
 
     /**
@@ -185,5 +194,41 @@ public class TripController {
 public ResponseEntity<List<TripResponse>> getMyTrips(Authentication authentication) {
     String email = authentication.getName();
     return ResponseEntity.ok(tripService.getMyTrips(email));
+}
+
+// =========================================================================
+// CHANGED (Phase 4 — booking wiring): new booking management endpoints
+// =========================================================================
+
+/**
+ * GET /api/trips/my-bookings?status=CONFIRMED|CANCELLED|PENDING (optional)
+ * Returns bookings for the authenticated student, optionally filtered by booking_status.
+ *
+ * <p>Without a status param: returns ALL bookings (same as before).
+ * With status=CONFIRMED: only active/upcoming bookings (the "oncoming" screen).
+ * With status=CANCELLED: only cancelled bookings (the history screen).
+ *
+ * <p>CHANGED: Added optional status query param so the frontend can separate active trips
+ * from cancelled ones without client-side filtering.
+ */
+@GetMapping("/my-bookings")
+public ResponseEntity<List<TripBookingResponse>> getMyBookings(
+        Authentication authentication,
+        @RequestParam(required = false) String status) {
+    String email = authentication.getName();
+    return ResponseEntity.ok(tripService.getMyBookings(email, status));
+}
+
+/**
+ * PATCH /api/trips/bookings/{tripId}/cancel
+ * Cancels the authenticated student's booking on the given trip.
+ *
+ * <p>CHANGED: The Android client sends the tripId here (it is what the student sees on screen).
+ * The backend resolves the booking from (tripId + JWT student email) and cancels it.
+ * Ownership is verified inside the service — only the student who made the booking can cancel.
+ */
+@PatchMapping("/bookings/{tripId}/cancel")
+public ResponseEntity<TripResponse> cancelBooking(@PathVariable Long tripId) {
+    return ResponseEntity.ok(tripService.cancelBooking(tripId));
 }
 }

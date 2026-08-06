@@ -127,8 +127,9 @@ Authorization: Bearer {{driver_token}}
 GET http://localhost:8080/api/trips/1
 Authorization: Bearer {{student_token}}
 
+
 ### Get all trips (Verify Coordinates)
-GET http://localhost:8080/api/trips
+GET http://localhost:8080/api/trips/my-bookings
 Authorization: Bearer {{student_token}}
 
 ### Get trips by status
