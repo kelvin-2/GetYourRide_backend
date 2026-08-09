@@ -5,10 +5,16 @@ public class GeocodeResponse {
     private double latitude;
     private double longitude;
     private String matchedAddress;
+    private String message; // null when found=true; explains why not, when false
 
     public static GeocodeResponse notFound() {
+        return notFound("No matching address found. Please check the spelling and try again.");
+    }
+
+    public static GeocodeResponse notFound(String message) {
         GeocodeResponse r = new GeocodeResponse();
         r.found = false;
+        r.message = message;
         return r;
     }
 
@@ -25,4 +31,5 @@ public class GeocodeResponse {
     public double getLatitude() { return latitude; }
     public double getLongitude() { return longitude; }
     public String getMatchedAddress() { return matchedAddress; }
+    public String getMessage() { return message; }
 }
