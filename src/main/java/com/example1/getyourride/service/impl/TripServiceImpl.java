@@ -287,6 +287,7 @@ public class TripServiceImpl implements TripService {
 
         return tripRepository.findByStatus(status).stream()
                 .filter(trip -> isFunded || !"SHUTTLE".equalsIgnoreCase(trip.getTripType()))
+                .filter(trip -> !"SCHEDULED".equalsIgnoreCase(status) || trip.getAvailableSeats() > 0)
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -361,6 +362,7 @@ public class TripServiceImpl implements TripService {
 
         return tripRepository.findByDepartureAndDestination(departure, destination, includeShuttle)
                 .stream()
+                .filter(trip -> !"SCHEDULED".equalsIgnoreCase(trip.getStatus()) || trip.getAvailableSeats() > 0)
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -381,6 +383,7 @@ public class TripServiceImpl implements TripService {
                         "SCHEDULED",
                         includeShuttle
                 ).stream()
+                .filter(trip -> trip.getAvailableSeats() > 0)
                 .map(trip -> {
                     TripResponse response = mapToResponse(trip);
                     response.setPickupDistance(calculateHaversineDistance(depLat, depLng, trip.getDepartureLat(), trip.getDepartureLng()));
