@@ -1,5 +1,32 @@
 package com.example1.getyourride.service.impl;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.example1.getyourride.dto.response.RouteResponse;
 import com.example1.getyourride.dto.response.TripLegRouteResponse;
 import com.example1.getyourride.entity.Trip;
@@ -12,33 +39,6 @@ import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.TripStopRepository;
 import com.example1.getyourride.service.RouteService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link TripRouteServiceImpl}.
@@ -176,12 +176,15 @@ class TripRouteServiceImplTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("Three stops produce two legs, one ORS call per consecutive pair")
-    void threeStopsProduceTwoLegs() {
+    @DisplayName("Legs run departure -> each stop -> destination, so the vehicle actually arrives")
+    void legsBracketStopsWithTripEndpoints() {
+        // Stops deliberately distinct from the trip's own departure and destination, which is the
+        // case this exists to cover: before legs were bracketed, the route ended at stop 3 and the
+        // simulated vehicle never reached South Campus.
         List<TripStop> stops = Arrays.asList(
-                stop(1L, "Walmer", 1, -33.9758, 25.5858),
+                stop(1L, "Newton Park", 1, -33.9457, 25.5661),
                 stop(2L, "Library", 2, -33.9900, 25.6400),
-                stop(3L, "South Campus", 3, -33.9984, 25.6750));
+                stop(3L, "Humewood", 3, -33.9756, 25.6406));
 
         when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
         when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(stops);
@@ -190,16 +193,63 @@ class TripRouteServiceImplTest {
 
         List<TripLegRouteResponse> legs = tripRouteService.precomputeLegRoutes(TRIP_ID);
 
-        assertEquals(2, legs.size(), "n stops must yield n-1 legs");
-        verify(routeService, times(2)).getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        assertEquals(4, legs.size(), "3 stops bracketed by 2 endpoints must yield 4 legs");
+        verify(routeService, times(4)).getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
 
-        // Legs must chain: 1->2 then 2->3, so the simulator can walk them in order.
-        assertEquals(1, legs.get(0).getFromStopOrder());
-        assertEquals(2, legs.get(0).getToStopOrder());
-        assertEquals(2, legs.get(1).getFromStopOrder());
-        assertEquals(3, legs.get(1).getToStopOrder());
+        // Legs must chain 0->1->2->3->4 so the simulator can walk them in order. Order 0 is the
+        // trip's departure and order 4 its destination; neither is a trip_stop row.
+        assertEquals(0, legs.get(0).getFromStopOrder());
+        assertEquals(1, legs.get(0).getToStopOrder());
+        assertEquals(3, legs.get(3).getFromStopOrder());
+        assertEquals(4, legs.get(3).getToStopOrder());
+
         assertEquals(0, legs.get(0).getLegIndex());
-        assertEquals(1, legs.get(1).getLegIndex());
+        assertEquals(3, legs.get(3).getLegIndex());
+
+        // The synthetic endpoint orders must still resolve to readable names.
+        assertEquals("Walmer, 6th Avenue", legs.get(0).getFromStopName());
+        assertEquals("South Campus", legs.get(3).getToStopName());
+    }
+
+    @Test
+    @DisplayName("The first leg starts at the trip's departure coordinates")
+    void firstLegStartsAtTripDeparture() {
+        List<TripStop> stops = Collections.singletonList(
+                stop(1L, "Library", 1, -33.9900, 25.6400));
+
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
+        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(stops);
+        when(routeService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(route(2000));
+        when(tripLegRouteRepository.saveAll(anyList())).thenAnswer(i -> i.getArgument(0));
+
+        tripRouteService.precomputeLegRoutes(TRIP_ID);
+
+        verify(routeService).getRoute(-33.9758, 25.5858, -33.9900, 25.6400);
+        verify(routeService).getRoute(-33.9900, 25.6400, -33.9984, 25.6750);
+    }
+
+    @Test
+    @DisplayName("Stops repeated at the same location are merged into one waypoint")
+    void duplicateWaypointsAreMerged() {
+        // Exactly the shape of trips 552 and 555 in the live database: the student's stop restates
+        // the trip's departure point. Routing a zero-length leg returns no duration, which the
+        // simulator cannot pace, so the vehicle would sit still for a leg instead of moving.
+        List<TripStop> stops = Arrays.asList(
+                stop(1L, "South Campus", 1, -33.9758, 25.5858),
+                stop(2L, "South Campus again", 2, -33.9758, 25.5858),
+                stop(3L, "Library", 3, -33.9900, 25.6400));
+
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
+        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(stops);
+        when(routeService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(route(2000));
+        when(tripLegRouteRepository.saveAll(anyList())).thenAnswer(i -> i.getArgument(0));
+
+        List<TripLegRouteResponse> legs = tripRouteService.precomputeLegRoutes(TRIP_ID);
+
+        // departure == stop 1 == stop 2, so those three collapse to one waypoint, leaving
+        // departure -> Library -> destination.
+        assertEquals(2, legs.size());
+        verify(routeService, never()).getRoute(-33.9758, 25.5858, -33.9758, 25.5858);
     }
 
     @Test
@@ -268,28 +318,96 @@ class TripRouteServiceImplTest {
     }
 
     @Test
-    @DisplayName("A trip with one stop cannot form a leg and is rejected")
-    void singleStopRejected() {
+    @DisplayName("A trip with no stops still routes directly from its departure to its destination")
+    void noStopsStillProducesOneLeg() {
+        // Previously rejected for having fewer than two stops. That rejection was the reason 332 of
+        // the 353 trips in the live database could not be tracked at all: the overwhelming majority
+        // have no trip_stop rows, only trip-level departure and destination coordinates.
         when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
-        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID))
-                .thenReturn(Collections.singletonList(stop(1L, "Walmer", 1, -33.9758, 25.5858)));
+        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(new ArrayList<>());
+        when(routeService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(route(4200));
+        when(tripLegRouteRepository.saveAll(anyList())).thenAnswer(i -> i.getArgument(0));
+
+        List<TripLegRouteResponse> legs = tripRouteService.precomputeLegRoutes(TRIP_ID);
+
+        assertEquals(1, legs.size());
+        assertEquals(0, legs.get(0).getFromStopOrder());
+        assertEquals(1, legs.get(0).getToStopOrder());
+        verify(routeService).getRoute(-33.9758, 25.5858, -33.9984, 25.6750);
+    }
+
+    @Test
+    @DisplayName("A trip with neither stops nor coordinates has nothing to route and is rejected")
+    void noStopsAndNoCoordinatesRejected() {
+        trip.setDepartureLat(null);
+        trip.setDepartureLng(null);
+        trip.setDestinationLat(null);
+        trip.setDestinationLng(null);
+
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
+        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(new ArrayList<>());
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> tripRouteService.precomputeLegRoutes(TRIP_ID));
 
-        assertTrue(ex.getMessage().contains("stop"), "Actual: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("waypoint"), "Actual: " + ex.getMessage());
         verify(routeService, never()).getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
         // Nothing must be deleted when the request is invalid.
         verify(tripLegRouteRepository, never()).deleteByTripTripId(anyLong());
     }
 
     @Test
-    @DisplayName("A trip with no stops is rejected")
-    void noStopsRejected() {
+    @DisplayName("A single stop that repeats the only coordinates available is rejected")
+    void singleStopCollapsingToOneWaypointRejected() {
+        trip.setDestinationLat(null);
+        trip.setDestinationLng(null);
+
         when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
+        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID))
+                .thenReturn(Collections.singletonList(stop(1L, "Walmer", 1, -33.9758, 25.5858)));
+
+        // Departure and the only stop are the same place, and there is no destination to route to,
+        // so one waypoint remains.
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> tripRouteService.precomputeLegRoutes(TRIP_ID));
+
+        assertTrue(ex.getMessage().contains("waypoint"), "Actual: " + ex.getMessage());
+        verify(routeService, never()).getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        verify(tripLegRouteRepository, never()).deleteByTripTripId(anyLong());
+    }
+
+    // ---------------------------------------------------------------------
+    // ensureLegRoutes
+    // ---------------------------------------------------------------------
+
+    @Test
+    @DisplayName("ensureLegRoutes skips precomputation when legs already exist")
+    void ensureReusesExistingLegs() {
+        when(tripLegRouteRepository.countByTripTripId(TRIP_ID)).thenReturn(3L);
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
+        when(tripLegRouteRepository.findByTripTripIdOrderByFromStopOrderAsc(TRIP_ID))
+                .thenReturn(new ArrayList<>());
         when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(new ArrayList<>());
 
-        assertThrows(BadRequestException.class, () -> tripRouteService.precomputeLegRoutes(TRIP_ID));
+        tripRouteService.ensureLegRoutes(TRIP_ID, false);
+
+        // The point of the method: no ORS quota spent, and the existing legs are left in place.
+        verify(routeService, never()).getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        verify(tripLegRouteRepository, never()).deleteByTripTripId(anyLong());
+    }
+
+    @Test
+    @DisplayName("ensureLegRoutes with force=true recomputes even when legs exist")
+    void ensureForceRecomputes() {
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
+        when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(new ArrayList<>());
+        when(routeService.getRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(route(4200));
+        when(tripLegRouteRepository.saveAll(anyList())).thenAnswer(i -> i.getArgument(0));
+
+        tripRouteService.ensureLegRoutes(TRIP_ID, true);
+
+        verify(tripLegRouteRepository).deleteByTripTripId(TRIP_ID);
+        verify(routeService).getRoute(-33.9758, 25.5858, -33.9984, 25.6750);
     }
 
     @Test
@@ -338,7 +456,7 @@ class TripRouteServiceImplTest {
         leg.setDurationSeconds(350.0);
         leg.setRouteGeometry("[[-33.9758,25.5858],[-33.98,25.6],[-33.9984,25.675]]");
 
-        when(tripRepository.existsById(TRIP_ID)).thenReturn(true);
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
         when(tripLegRouteRepository.findByTripTripIdOrderByFromStopOrderAsc(TRIP_ID))
                 .thenReturn(Collections.singletonList(leg));
         when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(Arrays.asList(
@@ -360,7 +478,7 @@ class TripRouteServiceImplTest {
     @Test
     @DisplayName("getLegRoutes is empty when precomputation has not run")
     void getLegRoutesEmptyBeforePrecompute() {
-        when(tripRepository.existsById(TRIP_ID)).thenReturn(true);
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
         when(tripLegRouteRepository.findByTripTripIdOrderByFromStopOrderAsc(TRIP_ID))
                 .thenReturn(new ArrayList<>());
         when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(new ArrayList<>());
@@ -371,7 +489,7 @@ class TripRouteServiceImplTest {
     @Test
     @DisplayName("getLegRoutes returns 404 semantics for an unknown trip")
     void getLegRoutesUnknownTripIsNotFound() {
-        when(tripRepository.existsById(TRIP_ID)).thenReturn(false);
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> tripRouteService.getLegRoutes(TRIP_ID));
     }
@@ -389,7 +507,7 @@ class TripRouteServiceImplTest {
         leg.setDistanceMeters(3500.0);
         leg.setRouteGeometry("not json");
 
-        when(tripRepository.existsById(TRIP_ID)).thenReturn(true);
+        when(tripRepository.findById(TRIP_ID)).thenReturn(Optional.of(trip));
         when(tripLegRouteRepository.findByTripTripIdOrderByFromStopOrderAsc(TRIP_ID))
                 .thenReturn(Collections.singletonList(leg));
         when(tripStopRepository.findByTripTripIdOrderByStopOrderAsc(TRIP_ID)).thenReturn(new ArrayList<>());

@@ -66,6 +66,27 @@ public interface TripService {
     TripResponse updateTripStatus(Long tripId, String status);
 
     /**
+     * Puts a trip on the road: ensures its route is precomputed, sets it to {@code IN_PROGRESS}
+     * and resets the tracking cursor to the start of the route.
+     *
+     * <p>Exists because the documented start sequence was three separate calls
+     * ({@code precompute-route}, then {@code PATCH /status?status=IN_PROGRESS}, relying on the
+     * status change to seed tracking) and getting them out of order left a trip
+     * {@code IN_PROGRESS} with no legs — a vehicle that never moves, with nothing in the response
+     * to say why. Collapsing them into one action means a trip cannot be started half-configured.
+     *
+     * <p>Safe to call again on a trip that is already running: it restarts the trip from its
+     * departure point and clears any stops marked as arrived on the previous run.
+     *
+     * @param tripId         The ID of the trip to start.
+     * @param recomputeRoute Recompute the leg routes even if they already exist. Pass true after
+     *                       editing the trip's stops; otherwise the existing legs are reused and
+     *                       no OpenRouteService quota is spent.
+     * @return The updated trip, including its seeded {@code currentLat}/{@code currentLng}.
+     */
+    TripResponse startTrip(Long tripId, boolean recomputeRoute);
+
+    /**
      * Cancels a trip by setting its status to CANCELLED.
      * @param tripId The ID of the trip.
      * @return The updated trip details.

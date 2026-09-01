@@ -18,6 +18,7 @@ import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.TripStopRepository;
+import com.example1.getyourride.service.TripRouteService;
 import com.example1.getyourride.service.TripStopService;
 
 @Service
@@ -35,13 +36,16 @@ public class TripStopServiceImpl implements TripStopService {
     private final TripStopRepository tripStopRepository;
     private final TripRepository tripRepository;
     private final StudentRepository studentRepository;
+    private final TripRouteService tripRouteService;
 
     public TripStopServiceImpl(TripStopRepository tripStopRepository,
                                TripRepository tripRepository,
-                               StudentRepository studentRepository) {
+                               StudentRepository studentRepository,
+                               TripRouteService tripRouteService) {
         this.tripStopRepository = tripStopRepository;
         this.tripRepository = tripRepository;
         this.studentRepository = studentRepository;
+        this.tripRouteService = tripRouteService;
     }
 
     @Override
@@ -66,6 +70,7 @@ public class TripStopServiceImpl implements TripStopService {
         }
 
         TripStop savedStop = tripStopRepository.save(stop);
+        refreshLegRoutesAfterStopChange(tripId);
         return mapToResponse(savedStop);
     }
 
@@ -93,6 +98,7 @@ public class TripStopServiceImpl implements TripStopService {
         stop.setStopOrder(trip.getStops().size() + 1);
 
         TripStop savedStop = tripStopRepository.save(stop);
+        refreshLegRoutesAfterStopChange(tripId);
         return mapToResponse(savedStop);
     }
 
@@ -107,10 +113,48 @@ public class TripStopServiceImpl implements TripStopService {
     @Override
     @Transactional
     public void removeStop(Long stopId) {
-        if (!tripStopRepository.existsById(stopId)) {
-            throw new ResourceNotFoundException("Trip stop not found with id: " + stopId);
+        // Loaded rather than existsById-then-delete because the trip id is needed to re-route
+        // afterwards, and it is only reachable through the stop.
+        TripStop stop = tripStopRepository.findById(stopId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip stop not found with id: " + stopId));
+        Long tripId = stop.getTrip() != null ? stop.getTrip().getTripId() : null;
+
+        tripStopRepository.delete(stop);
+
+        if (tripId != null) {
+            refreshLegRoutesAfterStopChange(tripId);
         }
-        tripStopRepository.deleteById(stopId);
+    }
+
+    /**
+     * Rebuilds the trip's leg routes so they describe the stops as they now stand.
+     *
+     * <p>Without this, adding a pickup stop to an already-routed trip left the vehicle following
+     * the old route: the simulator drives {@code trip_leg_route}, not {@code trip_stop}, so a new
+     * stop would appear as a marker on the map that the vehicle drives straight past.
+     *
+     * <p>Only trips that already have legs are re-routed. A trip that has never been routed is
+     * left alone so that adding a stop does not quietly spend OpenRouteService quota — starting
+     * the trip computes the route anyway.
+     *
+     * <p>Failures are logged, never propagated. Re-routing needs a live ORS call, and losing the
+     * student's stop because a third-party service was unreachable would be a worse outcome than
+     * a stale route: the stop is saved, and starting the trip with
+     * {@code recomputeRoute=true} repairs the legs.
+     */
+    private void refreshLegRoutesAfterStopChange(Long tripId) {
+        try {
+            if (tripRouteService.getLegRoutes(tripId).isEmpty()) {
+                log.debug("Trip {} has no precomputed legs; leaving route generation to trip start", tripId);
+                return;
+            }
+            int legCount = tripRouteService.ensureLegRoutes(tripId, true).size();
+            log.info("Rebuilt {} leg route(s) for trip {} after a stop change", legCount, tripId);
+        } catch (RuntimeException ex) {
+            log.warn("Could not rebuild leg routes for trip {} after a stop change: {}. "
+                    + "The stop was saved; start the trip with recomputeRoute=true to repair the route.",
+                    tripId, ex.getMessage());
+        }
     }
 
     /**
