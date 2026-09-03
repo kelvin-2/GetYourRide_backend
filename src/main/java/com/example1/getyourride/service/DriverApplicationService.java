@@ -13,7 +13,6 @@ import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import com.example1.getyourride.security.JwtUtil;
 
-import org.aspectj.weaver.ast.And;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,7 +113,16 @@ public class DriverApplicationService {
     }
 
     /**
-     * Phase 2: Upload document to Cloudinary and save the URL in the DB.
+     * Phase 2: Upload document to Cloudinary and save the secure URL in the DB.
+     *
+     * Key details for admin document retrieval:
+     * - Files are stored in Cloudinary under folder: getyourride/driver-applications/{applicationId}
+     * - The public_id uses the documentType (DriversLicence or VehicleRegistration)
+     * - resource_type is "image" to ensure proper image delivery and transformation support
+     * - The original filename is preserved via context metadata so admin can see what was uploaded
+     * - The secure_url stored in the database is a direct link that admin can open in a browser
+     *   to view the uploaded document immediately
+     * - Cloudinary serves images with correct content type headers, so the browser renders them
      */
     @Transactional
     public void uploadDocument(Long applicationId, String documentType, MultipartFile file) throws IOException {
@@ -125,23 +133,54 @@ public class DriverApplicationService {
             throw new IllegalArgumentException("File cannot be empty.");
         }
 
+        // Validate file is an image
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException(
+                    "Only image files (JPEG, PNG) are accepted. Received: " + contentType);
+        }
+
+        // Validate file size (max 5MB)
+        long maxSize = 5L * 1024L * 1024L;
+        if (file.getSize() > maxSize) {
+            throw new IllegalArgumentException(
+                    "File is too large (" + (file.getSize() / 1024 / 1024) + "MB). Maximum is 5MB.");
+        }
+
+        // Validate document type
+        if (!"DriversLicence".equalsIgnoreCase(documentType) &&
+                !"VehicleRegistration".equalsIgnoreCase(documentType)) {
+            throw new IllegalArgumentException("Unknown document type: " + documentType +
+                    ". Accepted: DriversLicence, VehicleRegistration");
+        }
+
+        // Upload to Cloudinary with metadata for admin traceability
+        // The secure_url returned is a permanent, publicly accessible link that
+        // the admin panel can use to display the document directly
+        String originalFilename = file.getOriginalFilename() != null
+                ? file.getOriginalFilename()
+                : "document";
+
         @SuppressWarnings("unchecked")
         Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(),
                 ObjectUtils.asMap(
                         "folder", "getyourride/driver-applications/" + applicationId,
                         "public_id", documentType,
-                        "resource_type", "auto", // Handles both PDF and Image files
-                        "overwrite", true
+                        "resource_type", "image",
+                        "overwrite", true,
+                        "context", "original_filename=" + originalFilename
+                                + "|application_id=" + applicationId
+                                + "|document_type=" + documentType
                 ));
 
+        // The secure_url is a direct HTTPS link to the image on Cloudinary CDN.
+        // Admin can open this URL in any browser to see the document.
         String cloudUrl = (String) uploadResult.get("secure_url");
 
         if ("DriversLicence".equalsIgnoreCase(documentType)) {
             app.setLicenseImagePath(cloudUrl);
-        } else if ("VehicleRegistration".equalsIgnoreCase(documentType)) {
-            app.setRegistrationFilePath(cloudUrl);
         } else {
-            throw new IllegalArgumentException("Unknown document type: " + documentType);
+            app.setRegistrationFilePath(cloudUrl);
         }
 
         driverAppRepo.save(app);
