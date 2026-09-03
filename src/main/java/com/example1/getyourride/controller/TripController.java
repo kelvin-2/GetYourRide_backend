@@ -106,6 +106,30 @@ public class TripController {
     }
 
     /**
+     * Start a trip: precompute its route if needed, set it to IN_PROGRESS and begin live tracking.
+     *
+     * <p>This is the endpoint the driver's "start trip" button should call. It replaces the
+     * three-step sequence in the tracking documentation (precompute-route, then
+     * {@code PATCH /status?status=IN_PROGRESS}), where doing the steps out of order left the trip
+     * running with no route and a stationary vehicle.
+     *
+     * <p>{@code POST} rather than {@code PATCH} because it creates {@code trip_leg_route} rows as
+     * well as transitioning the trip.
+     *
+     * @param id The trip ID.
+     * @param recomputeRoute Recompute the leg routes even if they already exist. Pass {@code true}
+     *                       after the trip's stops change; the default reuses existing legs and
+     *                       spends no OpenRouteService quota.
+     * @return The updated trip, including the seeded live position.
+     */
+    @PostMapping("/{id}/start")
+    public ResponseEntity<TripResponse> startTrip(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean recomputeRoute) {
+        return ResponseEntity.ok(tripService.startTrip(id, recomputeRoute));
+    }
+
+    /**
      * Cancel a trip.
      * Changes the status of the trip to CANCELLED.
      * @param id The trip ID.

@@ -1,5 +1,16 @@
 package com.example1.getyourride.service.impl;
 
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example1.getyourride.dto.message.StopEventStatus;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.TripLegRoute;
@@ -14,16 +25,6 @@ import com.example1.getyourride.service.TrackingBroadcastService;
 import com.example1.getyourride.service.TripSimulationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Default {@link TripSimulationService}.
@@ -116,9 +117,14 @@ public class TripSimulationServiceImpl implements TripSimulationService {
         trip.setCurrentPointIndex(0);
         trip.setDwellUntil(null);
 
-        // Seed the position at the first stop so a client that loads the screen before the first tick
-        // has somewhere to draw the marker, rather than a null island or a blank map.
-        if (!stops.isEmpty()) {
+        // Seed the position at the start of the route so a client that loads the screen before the
+        // first tick has somewhere to draw the marker, rather than a null island or a blank map.
+        // The trip's departure is preferred over its first stop because that is where leg 0 now
+        // begins; the first stop is the fallback for trips that never captured departure coordinates.
+        if (trip.getDepartureLat() != null && trip.getDepartureLng() != null) {
+            trip.setCurrentLat(trip.getDepartureLat());
+            trip.setCurrentLng(trip.getDepartureLng());
+        } else if (!stops.isEmpty()) {
             TripStop first = stops.get(0);
             trip.setCurrentLat(first.getLatitude());
             trip.setCurrentLng(first.getLongitude());
@@ -247,7 +253,12 @@ public class TripSimulationServiceImpl implements TripSimulationService {
                 .findFirst();
 
         if (arrived.isEmpty()) {
-            log.warn("Trip {} leg ends at stop_order {} but no such stop exists", trip.getTripId(), toStopOrder);
+            // Expected, not a fault: legs are bracketed by the trip's own departure (stop_order 0)
+            // and destination (maxStopOrder + 1), and neither is a trip_stop row. The final leg
+            // therefore always ends at an order with no stop to flip — arrival at the destination
+            // is reported by the trip reaching COMPLETED, not by a STOP_EVENT.
+            log.debug("Trip {} leg ends at stop_order {}, which is a trip endpoint rather than a stop",
+                    trip.getTripId(), toStopOrder);
             return;
         }
 

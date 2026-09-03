@@ -45,6 +45,27 @@ public class TripResponse {
      */
     private Long bookingId;
 
+    // --- Live tracking state -------------------------------------------------
+    // Mirrors the trip.current_* columns the simulation engine writes on every tick.
+    //
+    // These exist so GET /api/trips/{id} is a usable polling fallback when the STOMP socket is
+    // unavailable, which tracking documentation section 5 (Phase 5) requires. Without them the
+    // Android TrackingViewModel's refreshTripDetails() has no position field to read, so it has
+    // to preserve whatever the socket last delivered and a client that never connected shows no
+    // vehicle at all. Null until the trip starts moving.
+
+    /** Vehicle's most recently published latitude, or null if the trip has not started. */
+    private Double currentLat;
+
+    /** Vehicle's most recently published longitude, or null if the trip has not started. */
+    private Double currentLng;
+
+    /**
+     * Zero-based index of the leg the vehicle is currently driving, matching the {@code legIndex}
+     * on {@code LOCATION_UPDATE} messages so a polling client and a subscribed client agree.
+     */
+    private Integer currentLegIndex;
+
     private String bookingStatus;
     private String routeName;
     private String slotTime;
