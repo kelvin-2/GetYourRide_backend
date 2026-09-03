@@ -77,6 +77,7 @@ class TripServiceImplTest {
         Trip trip = new Trip();
         trip.setTripId(1L);
         trip.setTripType("SHUTTLE");
+        trip.setAvailableSeats(10);
         trip.setDepartureLat(-34.0);
         trip.setDepartureLng(25.0);
         trip.setDestinationLat(-34.1);
@@ -179,6 +180,38 @@ class TripServiceImplTest {
         assertEquals(2001L, results.get(1).getTripId());
         assertEquals("PENDING", results.get(1).getBookingStatus());
         assertEquals(1001L, results.get(2).getTripId());
+    }
+
+    @Test
+    void getTripsByStatus_Scheduled_ExcludesTripsWithZeroSeats() {
+        String email = "student@test.com";
+        Student student = new Student();
+        student.setIsFunded(false);
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+        when(driverRepository.findByEmail(email)).thenReturn(Optional.empty());
+
+        Trip tripWithSeats = new Trip();
+        tripWithSeats.setTripId(1L);
+        tripWithSeats.setAvailableSeats(3);
+        tripWithSeats.setStatus("SCHEDULED");
+        tripWithSeats.setDriver(new com.example1.getyourride.entity.Driver());
+        tripWithSeats.getDriver().setFirstName("Driver");
+        tripWithSeats.getDriver().setLastName("One");
+
+        Trip tripWithNoSeats = new Trip();
+        tripWithNoSeats.setTripId(2L);
+        tripWithNoSeats.setAvailableSeats(0);
+        tripWithNoSeats.setStatus("SCHEDULED");
+        tripWithNoSeats.setDriver(new com.example1.getyourride.entity.Driver());
+        tripWithNoSeats.getDriver().setFirstName("Driver");
+        tripWithNoSeats.getDriver().setLastName("Two");
+
+        when(tripRepository.findByStatus("SCHEDULED")).thenReturn(List.of(tripWithSeats, tripWithNoSeats));
+
+        List<TripResponse> results = tripService.getTripsByStatus("SCHEDULED", email);
+
+        assertEquals(1, results.size());
+        assertEquals(1L, results.get(0).getTripId());
     }
 
 }
