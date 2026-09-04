@@ -31,6 +31,7 @@ import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.TripStop;
+import com.example1.getyourride.entity.TripStopStatus;
 import com.example1.getyourride.entity.Vehicle;
 import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
@@ -366,6 +367,26 @@ public class TripServiceImpl implements TripService {
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
         trip.setStatus("SCHEDULED");
+
+        // Clear tracking state left behind by a previous run.
+        //
+        // Rescheduling a COMPLETED trip used to change only the status, so the trip kept the
+        // position of its final point, its last leg index, its arrival time, and its stops marked
+        // ARRIVED. A client then drew a stationary vehicle sitting at the destination and reported
+        // the trip as live, on a trip that had not departed. Resetting here means "SCHEDULED"
+        // consistently describes a trip that has not started.
+        trip.setCurrentLat(null);
+        trip.setCurrentLng(null);
+        trip.setCurrentLegIndex(0);
+        trip.setCurrentPointIndex(0);
+        trip.setDwellUntil(null);
+        trip.setArrivalTime(null);
+
+        List<TripStop> stops = trip.getStops();
+        if (stops != null) {
+            stops.forEach(stop -> stop.setStatus(TripStopStatus.PENDING));
+        }
+
         return mapToResponse(tripRepository.save(trip));
     }
 
