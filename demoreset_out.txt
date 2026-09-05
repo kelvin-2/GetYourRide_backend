@@ -1,0 +1,12 @@
+reset trip 563 : COMPLETED -> SCHEDULED  (lat= arrival=)
+reset trip 561 : COMPLETED -> SCHEDULED  (lat= arrival=)
+reset trip 562 : COMPLETED -> SCHEDULED  (lat= arrival=)
+reset trip 555 : COMPLETED -> SCHEDULED  (lat= arrival=)
+trip 552 already SCHEDULED - left alone
+
+--- final demo state for test@mandela.ac.za ---
+trip 563  SCHEDULED  Newton Park, Cape Road Spar  -> Missionvale Campus     stops=0
+trip 561  SCHEDULED  Newton Park, Cape Road Spar  -> South Campus           stops=3
+trip 562  SCHEDULED  South Campus                 -> North Campus           stops=2
+trip 555  SCHEDULED  South Campus                 -> Missionvale Campus     stops=2
+trip 552  SCHEDULED  South Campus                 -> Missionvale Campus     stops=1
