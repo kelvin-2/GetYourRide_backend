@@ -31,6 +31,7 @@ import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.TripStop;
+import com.example1.getyourride.entity.TripStopStatus;
 import com.example1.getyourride.entity.Vehicle;
 import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
@@ -40,6 +41,7 @@ import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import com.example1.getyourride.service.GeocodingService;
+import com.example1.getyourride.service.TripRouteService;
 import com.example1.getyourride.service.TripService;
 import com.example1.getyourride.service.TripSimulationService;
 
@@ -55,6 +57,7 @@ public class TripServiceImpl implements TripService {
     private final BookingRepository bookingRepository;
     private final GeocodingService geocodingService;
     private final TripSimulationService tripSimulationService;
+    private final TripRouteService tripRouteService;
 
     public TripServiceImpl(TripRepository tripRepository,
                            DriverRepository driverRepository,
@@ -62,7 +65,8 @@ public class TripServiceImpl implements TripService {
                            VehicleRepository vehicleRepository,
                            BookingRepository bookingRepository,
                            GeocodingService geocodingService,
-                           TripSimulationService tripSimulationService) {
+                           TripSimulationService tripSimulationService,
+                           TripRouteService tripRouteService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
@@ -70,6 +74,7 @@ public class TripServiceImpl implements TripService {
         this.bookingRepository = bookingRepository;
         this.geocodingService = geocodingService;
         this.tripSimulationService = tripSimulationService;
+        this.tripRouteService = tripRouteService;
     }
 
     @Override
@@ -314,6 +319,28 @@ public class TripServiceImpl implements TripService {
 
     @Override
     @Transactional
+    public TripResponse startTrip(Long tripId, boolean recomputeRoute) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+
+        // A cancelled or finished trip has no journey left to simulate. Rejecting these outright
+        // beats setting IN_PROGRESS and leaving the scheduler to move a vehicle nobody is expecting.
+        if ("CANCELLED".equalsIgnoreCase(trip.getStatus()) || "COMPLETED".equalsIgnoreCase(trip.getStatus())) {
+            throw new BadRequestException(String.format(
+                    "Trip %d is %s and cannot be started. Reschedule it first "
+                            + "(PATCH /api/trips/%d/schedule).", tripId, trip.getStatus().toUpperCase(), tripId));
+        }
+
+        // Route first, status second. If the route cannot be built the trip stays SCHEDULED and the
+        // caller gets the reason, rather than ending up IN_PROGRESS with a vehicle that never moves.
+        tripRouteService.ensureLegRoutes(tripId, recomputeRoute);
+
+        // Delegates so the IN_PROGRESS transition and the tracking-cursor reset stay in one place.
+        return updateTripStatus(tripId, "IN_PROGRESS");
+    }
+
+    @Override
+    @Transactional
     public TripResponse cancelTrip(Long tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
@@ -340,6 +367,26 @@ public class TripServiceImpl implements TripService {
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
         trip.setStatus("SCHEDULED");
+
+        // Clear tracking state left behind by a previous run.
+        //
+        // Rescheduling a COMPLETED trip used to change only the status, so the trip kept the
+        // position of its final point, its last leg index, its arrival time, and its stops marked
+        // ARRIVED. A client then drew a stationary vehicle sitting at the destination and reported
+        // the trip as live, on a trip that had not departed. Resetting here means "SCHEDULED"
+        // consistently describes a trip that has not started.
+        trip.setCurrentLat(null);
+        trip.setCurrentLng(null);
+        trip.setCurrentLegIndex(0);
+        trip.setCurrentPointIndex(0);
+        trip.setDwellUntil(null);
+        trip.setArrivalTime(null);
+
+        List<TripStop> stops = trip.getStops();
+        if (stops != null) {
+            stops.forEach(stop -> stop.setStatus(TripStopStatus.PENDING));
+        }
+
         return mapToResponse(tripRepository.save(trip));
     }
 
@@ -464,6 +511,11 @@ public class TripServiceImpl implements TripService {
                 .availableSeats(trip.getAvailableSeats())
                 .price(trip.getPrice())
                 .status(trip.getStatus())
+                // Live tracking state, so this response doubles as the polling fallback for a
+                // client whose WebSocket has dropped. Null until the trip starts moving.
+                .currentLat(trip.getCurrentLat())
+                .currentLng(trip.getCurrentLng())
+                .currentLegIndex(trip.getCurrentLegIndex())
                 .stops(trip.getStops() != null ? trip.getStops().stream()
                         .map(stop -> TripStopResponse.builder()
                                 .id(stop.getId())

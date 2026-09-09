@@ -1,8 +1,9 @@
 package com.example1.getyourride.service;
 
-import com.example1.getyourride.dto.response.RouteResponse;
-import com.example1.getyourride.exception.BadRequestException;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,8 +12,9 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.example1.getyourride.dto.response.RouteResponse;
+import com.example1.getyourride.exception.BadRequestException;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Thin client over the OpenRouteService directions API.
@@ -26,6 +28,9 @@ public class RouteService {
 
     private static final Logger log = LoggerFactory.getLogger(RouteService.class);
 
+    private static final String ORS_DIRECTIONS_URL =
+            "https://api.openrouteservice.org/v2/directions/driving-car";
+
     private final RestTemplate restTemplate = new RestTemplate();
 
     // Store in application.properties / an environment variable — never commit it to git.
@@ -34,17 +39,28 @@ public class RouteService {
     private String orsApiKey;
 
     public RouteResponse getRoute(double startLat, double startLng, double endLat, double endLng) {
-        String url = UriComponentsBuilder
-                .fromHttpUrl("https://api.openrouteservice.org/v2/directions/driving-car")
+        // build().encode().toUri() rather than toUriString(), and a URI rather than a String.
+        //
+        // This matters because the ORS key is base64 and ends with '='. Passing a String to
+        // RestTemplate makes it treat the value as a URI template and encode it a second time,
+        // so the key's trailing '=' became '%3D' and then '%253D'. ORS received a key ending in
+        // the literal text "%3D", rejected it, and answered 403 "Access to this API has been
+        // disallowed" — which reads like a dead key or an exhausted quota rather than a caller
+        // bug, and is why this went unnoticed. Handing over a URI encodes exactly once, because
+        // RestTemplate leaves a URI alone.
+        URI uri = UriComponentsBuilder
+                .fromHttpUrl(ORS_DIRECTIONS_URL)
                 .queryParam("api_key", orsApiKey)
                 // ORS expects lng,lat order (opposite of what you'd expect) — easy bug to hit
                 .queryParam("start", startLng + "," + startLat)
                 .queryParam("end", endLng + "," + endLat)
-                .toUriString();
+                .build()
+                .encode()
+                .toUri();
 
         JsonNode response;
         try {
-            response = restTemplate.getForObject(url, JsonNode.class);
+            response = restTemplate.getForObject(uri, JsonNode.class);
         } catch (RestClientException ex) {
             // Until Phase 2 this method only ever saw two hardcoded placeholder coordinates,
             // so failures were effectively impossible. Now that real trip and stop

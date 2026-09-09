@@ -1,7 +1,9 @@
 package com.example1.getyourride.service;
 
-import com.example1.getyourride.dto.response.RouteResponse;
-import com.example1.getyourride.exception.BadRequestException;
+import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,15 +11,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestTemplate;
-
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import org.springframework.web.client.RestTemplate;
+
+import com.example1.getyourride.dto.response.RouteResponse;
+import com.example1.getyourride.exception.BadRequestException;
 
 /**
  * Tests for the OpenRouteService client.
@@ -57,6 +57,24 @@ class RouteServiceTest {
 
         RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(routeService, "restTemplate");
         mockServer = MockRestServiceServer.bindTo(restTemplate).build();
+    }
+
+    @Test
+    @DisplayName("A base64 API key ending in '=' is percent-encoded exactly once")
+    void apiKeyIsNotDoubleEncoded() {
+        // Regression guard. Real ORS keys are base64 and end with '='. Building the request as a
+        // String made RestTemplate re-encode it as a URI template, so '=' became '%3D' and then
+        // '%253D'; ORS then saw a key ending in the literal text "%3D" and answered
+        // 403 "Access to this API has been disallowed". That reads like a revoked key or an
+        // exhausted quota, not a caller bug, so it cost real time to find.
+        ReflectionTestUtils.setField(routeService, "orsApiKey", "abc123In0=");
+
+        mockServer.expect(requestTo(containsString("api_key=abc123In0%3D")))
+                .andRespond(withSuccess(ORS_RESPONSE, MediaType.APPLICATION_JSON));
+
+        routeService.getRoute(-33.9758, 25.5858, -33.9984, 25.6750);
+
+        mockServer.verify();
     }
 
     @Test
