@@ -47,10 +47,10 @@ public class NotificationServiceImpl implements NotificationService {
         List<Booking> bookings = bookingRepository.findByTrip(trip);
 
         String message = String.format(
-                "Your ride from %s to %s on %s has been cancelled by the driver.",
+                "Ride cancelled: %s \u2192 %s (%s).",
                 trip.getDepartureStop(),
                 trip.getDestinationStop(),
-                trip.getDepartureTime() != null ? trip.getDepartureTime().format(WHEN_FORMAT) : "the scheduled time"
+                trip.getDepartureTime() != null ? trip.getDepartureTime().format(WHEN_FORMAT) : "scheduled time"
         );
 
         int created = 0;
