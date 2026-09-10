@@ -41,6 +41,7 @@ import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import com.example1.getyourride.service.GeocodingService;
+import com.example1.getyourride.service.NotificationService;
 import com.example1.getyourride.service.TripRouteService;
 import com.example1.getyourride.service.TripService;
 import com.example1.getyourride.service.TripSimulationService;
@@ -58,6 +59,7 @@ public class TripServiceImpl implements TripService {
     private final GeocodingService geocodingService;
     private final TripSimulationService tripSimulationService;
     private final TripRouteService tripRouteService;
+    private final NotificationService notificationService;
 
     public TripServiceImpl(TripRepository tripRepository,
                            DriverRepository driverRepository,
@@ -66,7 +68,8 @@ public class TripServiceImpl implements TripService {
                            BookingRepository bookingRepository,
                            GeocodingService geocodingService,
                            TripSimulationService tripSimulationService,
-                           TripRouteService tripRouteService) {
+                           TripRouteService tripRouteService,
+                           NotificationService notificationService) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
@@ -75,6 +78,7 @@ public class TripServiceImpl implements TripService {
         this.geocodingService = geocodingService;
         this.tripSimulationService = tripSimulationService;
         this.tripRouteService = tripRouteService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -346,7 +350,18 @@ public class TripServiceImpl implements TripService {
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
         trip.setStatus("CANCELLED");
-        return mapToResponse(tripRepository.save(trip));
+        Trip saved = tripRepository.save(trip);
+
+        // Let any students who had booked this trip know it was cancelled. Creates nothing
+        // if no one is booked. Notification failures must not roll back the cancellation.
+        try {
+            notificationService.notifyRideCancelled(saved);
+        } catch (Exception e) {
+            log.warn("Trip {} cancelled but failed to create cancellation notifications: {}",
+                    tripId, e.getMessage());
+        }
+
+        return mapToResponse(saved);
     }
 
     @Override
