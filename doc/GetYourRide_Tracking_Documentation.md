@@ -139,7 +139,12 @@ The shuttle has multiple ordered stops (`trip_stop`), so tracking is **leg-based
 
 ### 4.1 Precompute routes when a trip is created/scheduled
 
-For each pair of consecutive stops (ordered by `stop_order`), call ORS once and store the result:
+> ⚠️ **Superseded.** This section originally specified legs as consecutive `trip_stop` pairs only.
+> That was implemented in Phase 2 and then found to be insufficient — see the corrected rule below.
+> The original text is kept for context because the Phase 2 notes in `doc/Task` refer to it.
+
+**Original rule (no longer what the code does):** for each pair of consecutive stops ordered by
+`stop_order`, call ORS once and store the result.
 
 ```
 for i in 0..stops.size-2:
@@ -147,7 +152,44 @@ for i in 0..stops.size-2:
     INSERT INTO trip_leg_route (trip_id, from_stop_order, to_stop_order, route_geometry, distance_meters, duration_seconds)
 ```
 
-This must reuse the **same ORS client** currently wired into `RouteService` (used by `RouteController`) rather than duplicating the integration.
+**Why it changed.** `trip_stop` does not reliably begin at the trip's departure or end at its
+destination, so a stop-only leg set left the vehicle stranded short of where the trip claimed to
+go — trip 24's stops run *Summerstrand → North Campus* while its `destination_stop` is *South
+Campus*. Worse, it made the overwhelming majority of trips untrackable: measured on `shuttle_db`,
+only 8 of 353 trips have any `trip_stop` rows at all, so 345 could not form a single leg.
+
+**Current rule.** The waypoint list is the trip's departure, then each stop in `stop_order`, then
+the trip's destination:
+
+```
+waypoints = [trip.departure] + stops.orderBy(stop_order) + [trip.destination]
+for i in 0..waypoints.size-2:
+    leg = ORS.getRoute(waypoints[i].coords, waypoints[i+1].coords)
+```
+
+- The departure is addressed as `from_stop_order = 0` and the destination as `maxStopOrder + 1`.
+  Real stops are numbered from 1, so 0 is free and the legs stay in travel order under
+  `ORDER BY from_stop_order` without an extra column.
+- **Neither synthetic order corresponds to a `trip_stop` row.** A leg can therefore legitimately
+  end at an order with no stop to mark `ARRIVED`, which is why arrival at the destination is
+  reported by the trip reaching `COMPLETED` rather than by a `STOP_EVENT`.
+- A departure or destination without usable coordinates is skipped rather than failing, so trips
+  predating coordinate capture still route between their stops.
+- Consecutive waypoints within 25 m of each other are merged. Routing a zero-length leg returns no
+  duration, and the simulator derives its step size from that duration, so the vehicle would sit
+  still for the length of a leg. This is not defensive: trips 552 and 555 each had two stops at
+  identical coordinates and trip 25 had three.
+- A trip needs two distinct routable waypoints. Fewer is a `400`.
+
+This reuses the **same ORS client** wired into `RouteService` (used by `RouteController`) rather
+than duplicating the integration.
+
+> ⚠️ **ORS request encoding.** `RouteService` must hand `RestTemplate` a `java.net.URI`, not a
+> `String`. A `String` is treated as a URI template and encoded a second time; ORS API keys are
+> base64 and end with `=`, which became `%3D` and then `%253D`. ORS answered
+> `403 "Access to this API has been disallowed"` — indistinguishable from a revoked key or an
+> exhausted quota, and it cost real debugging time. Pinned by
+> `RouteServiceTest.apiKeyIsNotDoubleEncoded`.
 
 ### 4.2 Fix `RouteController` first
 
@@ -224,10 +266,33 @@ The two message shapes published on `/topic/trip/{tripId}`, implemented as `Loca
 ### 4.6 End-to-end flow for a simulated trip
 
 1. `POST /api/trips` with `stops[]` → trip + stops created.
-2. Backend precomputes and stores `trip_leg_route` rows for every consecutive stop pair (§4.1).
-3. `PATCH /api/trips/{id}/status?status=IN_PROGRESS` (or a dedicated `/start` endpoint) → sets `current_leg_index=0`, `current_point_index=0`, `current_lat/lng` = first stop's coordinates.
-4. Scheduler (§4.3) picks it up on the next tick and starts walking the polyline, broadcasting over STOMP (§4.4).
-5. Android `TrackingScreen` renders it live (§4.5).
+2. **`POST /api/trips/{id}/start`** → precomputes `trip_leg_route` if absent (§4.1), sets
+   `status = IN_PROGRESS`, and resets `current_leg_index=0`, `current_point_index=0`,
+   `current_lat/lng` = the trip's **departure** coordinates (falling back to the first stop only
+   when the trip has no departure coordinates).
+   Add `?recomputeRoute=true` after the trip's stops have changed.
+3. Scheduler (§4.3) picks it up on the next tick and starts walking the polyline, broadcasting over
+   STOMP (§4.4).
+4. Android `TrackingScreen` renders it live (§4.5).
+
+> The original sequence was three calls — `POST /{id}/precompute-route`, then
+> `PATCH /{id}/status?status=IN_PROGRESS`, relying on the status change to seed tracking. That
+> still works, but performing them out of order left a trip `IN_PROGRESS` with no legs: a vehicle
+> that never moves, with nothing in the response explaining why. `/start` collapses them so a trip
+> cannot be started half-configured, and it fails *before* changing the status if the route cannot
+> be built.
+
+**Adding a stop to an existing route.** `POST /api/trips/{tripId}/stops` and
+`/stops/student` now rebuild the trip's legs automatically, so a stop added after the route was
+computed is actually driven to rather than passed by. Only trips that already have legs are
+rebuilt, so adding a stop to a never-routed trip does not silently spend ORS quota. A rebuild
+failure is logged, not propagated — the stop is still saved, because losing a student's pickup
+because a third-party service was unreachable is the worse outcome. Recover with
+`?recomputeRoute=true` on `/start`.
+
+**Live position over REST.** `TripResponse` carries `currentLat`, `currentLng` and
+`currentLegIndex`, so `GET /api/trips/{id}` is a viable polling fallback when the socket is
+unavailable (§5 item 8). `currentLegIndex` matches the `legIndex` on `LOCATION_UPDATE`.
 
 ---
 
@@ -241,7 +306,23 @@ The two message shapes published on `/topic/trip/{tripId}`, implemented as `Loca
 | 4 | Leg-route precomputation on trip creation | ✅ Done — Phase 2, but as `POST /api/trips/{id}/precompute-route` rather than inside `createTrip`, so an ORS outage cannot block ride posting |
 | 5 | `@Scheduled` simulation engine | ✅ Done — Phase 4. Off unless `getyourride.tracking.simulation.enabled=true` |
 | 6 | WebSocket/STOMP configuration + broadcasting | ✅ Done — Phase 3. ⚠️ Subscriptions not yet authorised per-trip (Phase 5) |
-| 7 | Android `TrackingScreen` subscription + marker animation | ❌ Not started |
+| 7 | Android `TrackingScreen` subscription + marker animation | ⚠️ Partly done — see `doc/FRONTEND_TRACKING_TODO.md` |
+| 8 | Legs reach the trip's destination; trips without stops are trackable | ✅ Done — §4.1, verified end-to-end |
+| 9 | One-call trip start (`POST /api/trips/{id}/start`) | ✅ Done — §4.6 |
+| 10 | Live position on `TripResponse` for the polling fallback | ✅ Done — `currentLat`/`currentLng`/`currentLegIndex` |
+| 11 | ORS double-encoding fix (403 on every routing call) | ✅ Done — §4.1 note |
+| 12 | Seeded, trackable carpool trips | ✅ Done — `doc/05_carpool_tracking_seed.sql` |
+| 13 | Shuttle trips trackable (`shuttle_stop` has no coordinates; `route` has no waypoints) | ❌ Not started — carpool-only by decision |
+| 14 | Secrets moved out of `application.properties` | ❌ Not started — see §6 |
+| 15 | Per-trip authorisation on STOMP `SUBSCRIBE` | ❌ Not started — Phase 5 |
+
+**Verified end-to-end against `shuttle_db`** (localhost, `getyourride.tracking.simulation.enabled=true`):
+
+| Trip | Route | Stops | Legs | Result |
+|---|---|---|---|---|
+| 558 | Newton Park → South Campus | 3 | 4 | `COMPLETED`, 49 breadcrumbs over 240 s, 3/3 stops `ARRIVED`, final position on the destination |
+| 559 | South Campus → North Campus | 2, then 3 | 3 → 4 | Stop added after routing; legs rebuilt automatically; drove to the new stop then to North Campus; `COMPLETED` in 206 s with ~20 s dwell per stop |
+| 560 | Newton Park → Missionvale Campus | 0 | 1 | `COMPLETED` in 73 s over 12.5 km — the no-stops case, which is 345 of 353 trips |
 
 ## 6. Security Note
 

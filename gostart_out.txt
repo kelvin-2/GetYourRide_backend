@@ -1,0 +1,8 @@
+STARTED 563 : status=IN_PROGRESS lat=-33.9457 lng=25.5661
+
+--- student booking list: trip status vs booking status ---
+booking 10  trip 563  tripStatus=IN_PROGRESS  bookingStatus=CONFIRMED
+booking 8   trip 561  tripStatus=COMPLETED    bookingStatus=CONFIRMED
+booking 9   trip 562  tripStatus=COMPLETED    bookingStatus=CONFIRMED
+booking 4   trip 555  tripStatus=COMPLETED    bookingStatus=CONFIRMED
+booking 3   trip 552  tripStatus=SCHEDULED    bookingStatus=CONFIRMED

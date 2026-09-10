@@ -33,3 +33,11 @@ build/
 .vscode/
 # Added by code-review-graph
 .code-review-graph/
+
+### Local run / test scratch (never commit) ###
+app_run*.log
+*.token
+.test_token
+build_*.txt
+hs_err_pid*.log
+replay_pid*.log

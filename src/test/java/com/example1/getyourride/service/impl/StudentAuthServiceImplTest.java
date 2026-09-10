@@ -1,5 +1,26 @@
 package com.example1.getyourride.service.impl;
 
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.MockitoAnnotations;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import com.example1.getyourride.dto.request.StudentLoginRequest;
 import com.example1.getyourride.dto.request.StudentRegisterRequest;
 import com.example1.getyourride.dto.response.AuthResponse;
@@ -8,19 +29,6 @@ import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.security.JwtUtil;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.util.Map;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 class StudentAuthServiceImplTest {
 
@@ -193,7 +201,11 @@ class StudentAuthServiceImplTest {
         when(studentRepo.findByEmail(request.getEmail())).thenReturn(Optional.empty());
         when(driverRepo.findByEmail(request.getEmail())).thenReturn(Optional.of(shuttleDriver));
         when(passwordEncoder.matches(request.getPassword(), shuttleDriver.getPassword())).thenReturn(true);
-        when(jwtUtil.generateToken(4L, request.getEmail(), "SHUTTLE_DRIVER", anyMap())).thenReturn("token");
+        // Raw value, not anyMap(): Mockito rejects mixing matchers with raw arguments in one call,
+        // and the other three arguments here are raw. Using the same map the verify below expects
+        // also makes the stub assert the claims, which anyMap() did not.
+        when(jwtUtil.generateToken(4L, request.getEmail(), "SHUTTLE_DRIVER", Map.of("role", "SHUTTLE_DRIVER")))
+                .thenReturn("token");
 
         AuthResponse response = studentAuthService.login(request);
 
