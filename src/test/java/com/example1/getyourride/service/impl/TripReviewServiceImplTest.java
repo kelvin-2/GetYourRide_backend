@@ -53,11 +53,14 @@ class TripReviewServiceImplTest {
         booking.setStudent(student);
         booking.setBookingStatus(BookingStatus.BOARDED);
 
-        request = new TripRatingRequest(1L, 5, "Great driver!");
+        request = new TripRatingRequest(1L, 5, "Great driver!", new java.util.ArrayList<>());
     }
 
     @Test
     void rateTrip_Success() {
+        java.util.List<String> tags = java.util.Arrays.asList("On time", "Friendly");
+        request.setTags(tags);
+
         when(studentRepository.findByEmail(anyString())).thenReturn(Optional.of(student));
         when(bookingRepository.findById(anyLong())).thenReturn(Optional.of(booking));
         when(tripReviewRepository.findByBookingBookingId(anyLong())).thenReturn(Optional.empty());
@@ -69,6 +72,7 @@ class TripReviewServiceImplTest {
         assertEquals(5, result.getRating());
         assertEquals("Great driver!", result.getReview());
         assertEquals(booking, result.getBooking());
+        assertEquals(tags, result.getTags());
         verify(tripReviewRepository, times(1)).save(any(TripReview.class));
     }
 

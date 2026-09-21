@@ -54,6 +54,7 @@ public class TripReviewServiceImpl implements TripReviewService {
         review.setBooking(booking);
         review.setRating(request.getRating());
         review.setReview(request.getReview());
+        review.setTags(request.getTags());
 
         return tripReviewRepository.save(review);
     }

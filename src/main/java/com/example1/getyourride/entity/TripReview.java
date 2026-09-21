@@ -8,6 +8,8 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "trip_review")
@@ -31,6 +33,11 @@ public class TripReview {
 
     @Column(name = "review", columnDefinition = "TEXT")
     private String review;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "trip_review_tags", joinColumns = @JoinColumn(name = "trip_review_id"))
+    @Column(name = "tag")
+    private List<String> tags = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "review_date", updatable = false)
