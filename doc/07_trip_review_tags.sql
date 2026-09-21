@@ -13,3 +13,4 @@ CREATE TABLE `trip_review_tags` (
 -- Verification
 SHOW TABLES LIKE 'trip_review_tags';
 DESCRIBE `trip_review_tags`;
+d
