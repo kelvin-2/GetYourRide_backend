@@ -36,8 +36,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Find all bookings for a list of trips (used for cascade deletion)
     List<Booking> findByTripIn(List<Trip> trips);
 
-    // Delete all bookings for a list of trips (used for cascade deletion)
-    @Modifying
+    // Delete all bookings for a list of trips (used for cascade deletion).
+    // flush + clear keeps the persistence context consistent through the cascade so a later
+    // flush cannot trip over a stale managed Booking/Trip reference.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM Booking b WHERE b.trip IN :trips")
     void deleteByTripIn(@Param("trips") List<Trip> trips);
 }
