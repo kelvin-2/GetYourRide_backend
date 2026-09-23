@@ -42,8 +42,22 @@ public class TripReviewServiceImpl implements TripReviewService {
             throw new BadRequestException("You can only rate your own trips");
         }
 
-        if (booking.getBookingStatus() != BookingStatus.BOARDED) {
-            throw new BadRequestException("You can only rate trips you have boarded");
+        // A trip can be rated once the student has actually taken it. Two signals count:
+        //   1. The booking was marked BOARDED (driver scanned/boarded the student), or
+        //   2. The trip itself has COMPLETED — the ride happened and now sits in the student's
+        //      history. Bookings that were never scanned stay CONFIRMED even after the trip runs,
+        //      so relying on BOARDED alone wrongly blocked rating for trips shown as "past".
+        // Cancelled or expired bookings can never be rated.
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED
+                || booking.getBookingStatus() == BookingStatus.EXPIRED) {
+            throw new BadRequestException("You cannot rate a cancelled trip");
+        }
+
+        boolean boarded = booking.getBookingStatus() == BookingStatus.BOARDED;
+        boolean tripCompleted = booking.getTrip() != null
+                && "COMPLETED".equalsIgnoreCase(booking.getTrip().getStatus());
+        if (!boarded && !tripCompleted) {
+            throw new BadRequestException("You can only rate a trip once it has been completed");
         }
 
         if (tripReviewRepository.findByBookingBookingId(request.getBookingId()).isPresent()) {
