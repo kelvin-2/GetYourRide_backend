@@ -28,8 +28,10 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     // Returns the first vehicle assigned to this driver (for shuttle driver profile)
     Optional<Vehicle> findFirstByDriverDriverId(Long driverId);
 
-    // Delete all vehicles assigned to a driver (used for cascade deletion)
-    @Modifying
+    // Delete all vehicles assigned to a driver (used for cascade deletion).
+    // flush + clear so the bulk delete does not leave stale managed Vehicle/Driver entities in the
+    // persistence context, which triggered a TransientObjectException at the next flush.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM Vehicle v WHERE v.driver = :driver")
     void deleteByDriver(@Param("driver") Driver driver);
 }
