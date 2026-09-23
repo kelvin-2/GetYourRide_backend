@@ -4,6 +4,7 @@ import com.example1.getyourride.dto.request.TripRatingRequest;
 import com.example1.getyourride.entity.Booking;
 import com.example1.getyourride.entity.BookingStatus;
 import com.example1.getyourride.entity.Student;
+import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.TripReview;
 import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
@@ -107,8 +108,47 @@ class TripReviewServiceImplTest {
     }
 
     @Test
-    void rateTrip_NotBoarded() {
+    void rateTrip_NotBoardedAndTripNotCompleted() {
+        // Booking never boarded and the trip has not run yet — rating stays blocked.
         booking.setBookingStatus(BookingStatus.CONFIRMED);
+        Trip trip = new Trip();
+        trip.setStatus("IN_PROGRESS");
+        booking.setTrip(trip);
+
+        when(studentRepository.findByEmail(anyString())).thenReturn(Optional.of(student));
+        when(bookingRepository.findById(anyLong())).thenReturn(Optional.of(booking));
+
+        assertThrows(BadRequestException.class, () -> 
+            tripReviewService.rateTrip(request, "student@test.com"));
+    }
+
+    @Test
+    void rateTrip_ConfirmedButTripCompleted_Succeeds() {
+        // The student booked but was never scanned as boarded, yet the trip completed and now
+        // shows in their history. They should be able to rate it.
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        Trip trip = new Trip();
+        trip.setStatus("COMPLETED");
+        booking.setTrip(trip);
+
+        when(studentRepository.findByEmail(anyString())).thenReturn(Optional.of(student));
+        when(bookingRepository.findById(anyLong())).thenReturn(Optional.of(booking));
+        when(tripReviewRepository.findByBookingBookingId(anyLong())).thenReturn(Optional.empty());
+        when(tripReviewRepository.save(any(TripReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TripReview result = tripReviewService.rateTrip(request, "student@test.com");
+
+        assertNotNull(result);
+        assertEquals(5, result.getRating());
+        verify(tripReviewRepository, times(1)).save(any(TripReview.class));
+    }
+
+    @Test
+    void rateTrip_CancelledBooking_Blocked() {
+        booking.setBookingStatus(BookingStatus.CANCELLED);
+        Trip trip = new Trip();
+        trip.setStatus("COMPLETED");
+        booking.setTrip(trip);
 
         when(studentRepository.findByEmail(anyString())).thenReturn(Optional.of(student));
         when(bookingRepository.findById(anyLong())).thenReturn(Optional.of(booking));
