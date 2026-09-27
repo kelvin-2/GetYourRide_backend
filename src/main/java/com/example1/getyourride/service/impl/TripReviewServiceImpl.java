@@ -42,8 +42,8 @@ public class TripReviewServiceImpl implements TripReviewService {
             throw new BadRequestException("You can only rate your own trips");
         }
 
-        if (booking.getBookingStatus() != BookingStatus.BOARDED) {
-            throw new BadRequestException("You can only rate trips you have boarded");
+        if (booking.getBookingStatus() != BookingStatus.BOARDED && !"COMPLETED".equalsIgnoreCase(booking.getTrip().getStatus())) {
+            throw new BadRequestException("You can only rate trips that have been completed or boarded");
         }
 
         if (tripReviewRepository.findByBookingBookingId(request.getBookingId()).isPresent()) {

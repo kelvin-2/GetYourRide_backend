@@ -90,12 +90,30 @@ class TripReviewControllerTest {
 
     @Test
     @WithMockUser(username = "student@test.com")
+    void rateTrip_Conflict() throws Exception {
+        TripRatingRequest request = new TripRatingRequest(1L, 5, "Excellent!", new ArrayList<>());
+        
+        when(tripReviewService.rateTrip(any(TripRatingRequest.class), eq("student@test.com")))
+                .thenThrow(new com.example1.getyourride.exception.BadRequestException("You have already rated this trip"));
+
+        mockMvc.perform(post("/api/ratings/rate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("You have already rated this trip"));
+    }
+
+    @Test
+    @WithMockUser(username = "student@test.com")
     void rateTrip_InvalidRequest() throws Exception {
         TripRatingRequest request = new TripRatingRequest(null, 6, "", new ArrayList<>()); // Invalid: null ID, rating > 5, empty review
 
         mockMvc.perform(post("/api/ratings/rate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.bookingId").value("Booking ID is required"))
+                .andExpect(jsonPath("$.rating").value("Rating must be at most 5"))
+                .andExpect(jsonPath("$.review").value("Review comment is required"));
     }
 }

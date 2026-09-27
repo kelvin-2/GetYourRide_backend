@@ -352,6 +352,13 @@ public class TripServiceImpl implements TripService {
         trip.setStatus("CANCELLED");
         Trip saved = tripRepository.save(trip);
 
+        // Update all associated bookings to CANCELLED
+        List<Booking> bookings = bookingRepository.findByTrip(trip);
+        for (Booking booking : bookings) {
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
+        }
+
         // Let any students who had booked this trip know it was cancelled. Creates nothing
         // if no one is booked. Notification failures must not roll back the cancellation.
         try {
@@ -372,7 +379,19 @@ public class TripServiceImpl implements TripService {
 
         trip.setStatus("COMPLETED");
         trip.setArrivalTime(java.time.LocalDateTime.now());
-        return mapToResponse(tripRepository.save(trip));
+        Trip saved = tripRepository.save(trip);
+
+        // Update all associated bookings to BOARDED (final state for rating)
+        // For carpools, there is no separate boarding step, so completion marks them as finished.
+        List<Booking> bookings = bookingRepository.findByTrip(trip);
+        for (Booking booking : bookings) {
+            if (booking.getBookingStatus() == BookingStatus.CONFIRMED || booking.getBookingStatus() == BookingStatus.PENDING) {
+                booking.setBookingStatus(BookingStatus.BOARDED);
+                bookingRepository.save(booking);
+            }
+        }
+
+        return mapToResponse(saved);
     }
 
     @Override
