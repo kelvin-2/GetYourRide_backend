@@ -53,6 +53,9 @@ class TripReviewServiceImplTest {
         booking.setBookingId(1L);
         booking.setStudent(student);
         booking.setBookingStatus(BookingStatus.BOARDED);
+        com.example1.getyourride.entity.Trip trip = new com.example1.getyourride.entity.Trip();
+        trip.setStatus("IN_PROGRESS");
+        booking.setTrip(trip);
 
         request = new TripRatingRequest(1L, 5, "Great driver!", new java.util.ArrayList<>());
     }
@@ -152,9 +155,29 @@ class TripReviewServiceImplTest {
 
         when(studentRepository.findByEmail(anyString())).thenReturn(Optional.of(student));
         when(bookingRepository.findById(anyLong())).thenReturn(Optional.of(booking));
+        when(tripReviewRepository.findByBookingBookingId(anyLong())).thenReturn(Optional.empty());
+        when(tripReviewRepository.save(any(TripReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThrows(BadRequestException.class, () -> 
+        TripReview result = tripReviewService.rateTrip(request, "student@test.com");
+
+        assertNotNull(result);
+        assertEquals(5, result.getRating());
+        verify(tripReviewRepository, times(1)).save(any(TripReview.class));
+    }
+
+    @Test
+    void rateTrip_NotBoarded_NotCompleted() {
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        com.example1.getyourride.entity.Trip trip = new com.example1.getyourride.entity.Trip();
+        trip.setStatus("IN_PROGRESS");
+        booking.setTrip(trip);
+
+        when(studentRepository.findByEmail(anyString())).thenReturn(Optional.of(student));
+        when(bookingRepository.findById(anyLong())).thenReturn(Optional.of(booking));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () -> 
             tripReviewService.rateTrip(request, "student@test.com"));
+        assertEquals("You can only rate trips that have been completed or boarded", exception.getMessage());
     }
 
     @Test
