@@ -18,8 +18,9 @@ public interface BoardingLogRepository extends JpaRepository<BoardingLog, Long> 
     // Find all boarding logs for a list of bookings (used for cascade deletion)
     List<BoardingLog> findByBookingIn(List<Booking> bookings);
 
-    // Delete all boarding logs for a list of bookings (used for cascade deletion)
-    @Modifying
+    // Delete all boarding logs for a list of bookings (used for cascade deletion).
+    // flush + clear keeps the persistence context consistent through the cascade.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM BoardingLog bl WHERE bl.booking IN :bookings")
     void deleteByBookingIn(@Param("bookings") List<Booking> bookings);
 }

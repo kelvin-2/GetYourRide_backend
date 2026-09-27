@@ -26,6 +26,9 @@ public class ShuttleDriverService {
     private final TripRepository tripRepository;
     private final BookingRepository bookingRepository;
     private final BoardingLogRepository boardingLogRepository;
+    private final TripStopRepository tripStopRepository;
+    private final TripLegRouteRepository tripLegRouteRepository;
+    private final TripLocationHistoryRepository tripLocationHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -34,6 +37,9 @@ public class ShuttleDriverService {
                                 TripRepository tripRepository,
                                 BookingRepository bookingRepository,
                                 BoardingLogRepository boardingLogRepository,
+                                TripStopRepository tripStopRepository,
+                                TripLegRouteRepository tripLegRouteRepository,
+                                TripLocationHistoryRepository tripLocationHistoryRepository,
                                 PasswordEncoder passwordEncoder,
                                 JwtUtil jwtUtil) {
         this.driverRepository = driverRepository;
@@ -41,6 +47,9 @@ public class ShuttleDriverService {
         this.tripRepository = tripRepository;
         this.bookingRepository = bookingRepository;
         this.boardingLogRepository = boardingLogRepository;
+        this.tripStopRepository = tripStopRepository;
+        this.tripLegRouteRepository = tripLegRouteRepository;
+        this.tripLocationHistoryRepository = tripLocationHistoryRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
     }
@@ -276,10 +285,17 @@ public class ShuttleDriverService {
 
     /**
      * Delete a shuttle driver's profile and all associated data.
-     * Cascade order:
+     *
+     * <p>Trips are removed with a bulk JPQL delete ({@link TripRepository#deleteByDriverId}), which
+     * does NOT trigger JPA entity cascading. So every table with a NOT NULL {@code trip_id} FK must
+     * be cleared explicitly first, or the trip delete fails with a foreign-key constraint violation.
+     * Those child tables are: trip_location_history, trip_leg_route and trip_stop (the last despite
+     * the Trip entity's CascadeType.ALL, because the bulk delete bypasses it).
+     *
+     * <p>Delete order (children before parents):
      * 1. Boarding logs (for all bookings on the driver's trips)
      * 2. Bookings (for all the driver's trips)
-     * 3. Trip stops (auto-cascaded by JPA via Trip entity)
+     * 3. Trip location history, trip leg routes, trip stops (all reference trip via NOT NULL FK)
      * 4. Trips
      * 5. Vehicles
      * 6. Driver
@@ -304,14 +320,20 @@ public class ShuttleDriverService {
                 bookingRepository.deleteByTripIn(driverTrips);
             }
 
-            // 5. Delete all trips (trip_stops cascade automatically via CascadeType.ALL)
+            // 5. Delete the trip-owned child rows that a bulk trip delete would otherwise orphan.
+            //    All three have a NOT NULL trip_id FK, so they must go before the trips.
+            tripLocationHistoryRepository.deleteByTripIn(driverTrips);
+            tripLegRouteRepository.deleteByTripIn(driverTrips);
+            tripStopRepository.deleteByTripIn(driverTrips);
+
+            // 6. Delete all trips
             tripRepository.deleteByDriverId(driverId);
         }
 
-        // 6. Delete all vehicles assigned to this driver
+        // 7. Delete all vehicles assigned to this driver
         vehicleRepository.deleteByDriver(driver);
 
-        // 7. Delete the driver record
+        // 8. Delete the driver record
         driverRepository.delete(driver);
     }
 

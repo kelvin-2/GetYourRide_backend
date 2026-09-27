@@ -78,8 +78,11 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE t.driver.driverId = :driverId AND UPPER(t.status) IN ('SCHEDULED', 'IN_PROGRESS', 'CONFIRMED') ORDER BY t.departureTime DESC")
     List<Trip> findActiveTrips(@org.springframework.data.repository.query.Param("driverId") Long driverId);
 
-    // Delete all trips for a driver (used for cascade deletion of driver profile)
-    @org.springframework.data.jpa.repository.Modifying
+    // Delete all trips for a driver (used for cascade deletion of driver profile).
+    // flush + clear so the bulk delete does not leave stale managed Trip entities (each holding
+    // a Driver/Vehicle reference) in the persistence context, which caused a TransientObjectException
+    // at the next flush.
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
     @org.springframework.data.jpa.repository.Query("DELETE FROM Trip t WHERE t.driver.driverId = :driverId")
     void deleteByDriverId(@org.springframework.data.repository.query.Param("driverId") Long driverId);
 }
