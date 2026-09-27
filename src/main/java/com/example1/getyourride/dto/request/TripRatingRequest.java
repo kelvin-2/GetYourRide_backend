@@ -23,7 +23,7 @@ public class TripRatingRequest {
     @Max(value = 5, message = "Rating must be at most 5")
     private Integer rating;
 
-    @NotBlank(message = "Review comment is required")
+   
     private String review;
 
     private List<String> tags = new ArrayList<>();
