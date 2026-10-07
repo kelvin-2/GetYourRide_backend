@@ -28,4 +28,7 @@ public interface TripReviewRepository extends JpaRepository<TripReview, Long> {
     /** Distinct review tags across this driver's reviews (e.g. "On time", "Friendly driver"). */
     @Query("SELECT DISTINCT t FROM TripReview r JOIN r.tags t WHERE r.booking.trip.driver.driverId = :driverId")
     List<String> findDistinctTagsByDriverId(@Param("driverId") Long driverId);
+
+    /** All reviews left on a specific trip, newest first. Used by the driver's "View Ratings" screen. */
+    List<TripReview> findByBooking_Trip_TripIdOrderByReviewDateDesc(Long tripId);
 }
