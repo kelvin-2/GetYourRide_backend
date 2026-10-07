@@ -12,10 +12,12 @@ import com.example1.getyourride.repository.BookingRepository;
 import com.example1.getyourride.repository.DriverApplicationRepository;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.TripRepository;
+import com.example1.getyourride.repository.TripReviewRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,6 +32,7 @@ public class DriverProfileService {
     private final TripRepository tripRepo;
     private final BookingRepository bookingRepo;
     private final BoardingLogRepository boardingLogRepo;
+    private final TripReviewRepository tripReviewRepo;
 
     public DriverProfileService(
             DriverRepository driverRepo,
@@ -37,7 +40,8 @@ public class DriverProfileService {
             VehicleRepository vehicleRepo,
             TripRepository tripRepo,
             BookingRepository bookingRepo,
-            BoardingLogRepository boardingLogRepo
+            BoardingLogRepository boardingLogRepo,
+            TripReviewRepository tripReviewRepo
     ) {
         this.driverRepo = driverRepo;
         this.driverAppRepo = driverAppRepo;
@@ -45,6 +49,7 @@ public class DriverProfileService {
         this.tripRepo = tripRepo;
         this.bookingRepo = bookingRepo;
         this.boardingLogRepo = boardingLogRepo;
+        this.tripReviewRepo = tripReviewRepo;
     }
 
     /**
@@ -87,6 +92,33 @@ public class DriverProfileService {
             vehicleModel = parts.length > 1 ? parts[1] : "";
         }
 
+        Long driverId = driver.getDriverId();
+
+        // ── Ratings & reviews aggregation (empty-safe) ──
+        Double avg = tripReviewRepo.findAverageRatingByDriverId(driverId);
+        double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0; // 1dp, 0 when none
+        int reviewCount = tripReviewRepo.countByDriverId(driverId);
+        List<String> reviewTags = tripReviewRepo.findDistinctTagsByDriverId(driverId);
+        if (reviewTags == null) {
+            reviewTags = new ArrayList<>();
+        }
+
+        // ── Trip activity counts (status compared uppercase in the query) ──
+        int completedTrips = tripRepo.countByDriverIdAndStatus(driverId, "COMPLETED");
+        int cancelledTrips = tripRepo.countByDriverIdAndStatus(driverId, "CANCELLED");
+        int upcomingTrips = tripRepo.countByDriverIdAndStatus(driverId, "SCHEDULED")
+                + tripRepo.countByDriverIdAndStatus(driverId, "CONFIRMED")
+                + tripRepo.countByDriverIdAndStatus(driverId, "IN_PROGRESS");
+        int totalPassengers = bookingRepo.countPassengersByDriverId(driverId);
+
+        // ── Application detail (document URLs + make/model as applied) ──
+        String applicationVehicleMakeModel = app != null && app.getVehicleMakeModel() != null
+                ? app.getVehicleMakeModel() : "";
+        String driversLicenceUrl = app != null && app.getLicenseImagePath() != null
+                ? app.getLicenseImagePath() : "";
+        String vehicleRegistrationUrl = app != null && app.getRegistrationFilePath() != null
+                ? app.getRegistrationFilePath() : "";
+
         return DriverProfileResponse.builder()
                 .firstName(driver.getFirstName())
                 .surname(driver.getLastName())
@@ -102,6 +134,27 @@ public class DriverProfileService {
                 .applicationStatus(applicationStatus)
                 .driversLicenceStatus(licenceStatus)
                 .vehicleRegistrationStatus(registrationStatus)
+                // 4. Driver stats
+                .totalTrips(driver.getTotalTrips())
+                .joinDate(driver.getJoinDate() != null ? driver.getJoinDate().toString() : null)
+                .verified(Boolean.TRUE.equals(driver.getIsVerified()))
+                .accountStatus(driver.getStatus() != null ? driver.getStatus() : "Active")
+                // 5. Ratings & reviews
+                .averageRating(averageRating)
+                .reviewCount(reviewCount)
+                .reviewTags(reviewTags)
+                // 6. Trip activity
+                .completedTrips(completedTrips)
+                .cancelledTrips(cancelledTrips)
+                .upcomingTrips(upcomingTrips)
+                .totalPassengers(totalPassengers)
+                // 7. Extra vehicle detail
+                .vehicleYear(vehicle != null ? vehicle.getVehicleYear() : null)
+                .vehicleStatus(vehicle != null && vehicle.getStatus() != null ? vehicle.getStatus() : "")
+                // 8. Application detail
+                .applicationVehicleMakeModel(applicationVehicleMakeModel)
+                .driversLicenceUrl(driversLicenceUrl)
+                .vehicleRegistrationUrl(vehicleRegistrationUrl)
                 .build();
     }
 

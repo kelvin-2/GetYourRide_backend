@@ -39,4 +39,10 @@ public class Vehicle {
 
     @Column(name = "capacity", nullable = false)
     private int capacity;
+
+    // Vehicle state ("Active" by default). Column already exists in shuttle_db with a
+    // default of 'Active'; mapped here so the driver profile can display it.
+    @Builder.Default
+    @Column(name = "status", nullable = false)
+    private String status = "Active";
 }
