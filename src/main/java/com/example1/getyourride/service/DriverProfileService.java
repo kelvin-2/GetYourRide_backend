@@ -1,5 +1,6 @@
 package com.example1.getyourride.service;
 
+import com.example1.getyourride.dto.request.UpdateDriverProfileRequest;
 import com.example1.getyourride.dto.response.DriverProfileDeleteResponse;
 import com.example1.getyourride.dto.response.DriverProfileResponse;
 import com.example1.getyourride.entity.Booking;
@@ -156,6 +157,96 @@ public class DriverProfileService {
                 .driversLicenceUrl(driversLicenceUrl)
                 .vehicleRegistrationUrl(vehicleRegistrationUrl)
                 .build();
+    }
+
+    /**
+     * Updates the authenticated student driver's own profile.
+     *
+     * <p>Editable fields only: contact number and all vehicle details. Name, surname, email and
+     * student number are identity fields and are never changed here.
+     *
+     * <p>Saving ALWAYS sends the application back for review: the driver is marked unverified
+     * ({@code is_verified = false}) and the application status is reset to "Pending Review", so an
+     * admin must re-approve the updated details before the driver can be treated as verified again.
+     * The {@code driver.status} column (shuttle-side availability) is intentionally left untouched.
+     *
+     * <p>The vehicle registration document is handled separately by the existing document-upload
+     * endpoint; this method only touches the structured fields.
+     */
+    @Transactional
+    public DriverProfileResponse updateProfile(String email, UpdateDriverProfileRequest request) {
+        Driver driver = driverRepo.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Driver profile not found."));
+
+        // 1. Personal: contact number is the only editable personal field.
+        if (request.getContactNumber() != null) {
+            driver.setPhone(request.getContactNumber());
+        }
+
+        // 2. Vehicle details. Guard the unique registration number so a readable error is thrown
+        //    instead of a raw DB constraint violation if the plate already belongs to someone else.
+        List<Vehicle> vehicles = vehicleRepo.findByDriverDriverId(driver.getDriverId());
+        Vehicle vehicle = vehicles.isEmpty() ? null : vehicles.get(0);
+
+        String newReg = request.getRegistrationNumber();
+        if (newReg != null && !newReg.isBlank()) {
+            vehicleRepo.findByRegistrationNumber(newReg).ifPresent(existing -> {
+                boolean belongsToSomeoneElse = existing.getDriver() == null
+                        || !existing.getDriver().getDriverId().equals(driver.getDriverId());
+                if (belongsToSomeoneElse) {
+                    throw new IllegalArgumentException(
+                            "That registration number is already in use by another vehicle.");
+                }
+            });
+        }
+
+        if (vehicle != null) {
+            if (request.getVehicleMakeModel() != null) {
+                vehicle.setModel(request.getVehicleMakeModel());
+            }
+            if (newReg != null && !newReg.isBlank()) {
+                vehicle.setRegistrationNumber(newReg);
+            }
+            if (request.getVehicleColor() != null) {
+                vehicle.setColour(request.getVehicleColor());
+            }
+            if (request.getSeatingCapacity() > 0) {
+                vehicle.setCapacity(request.getSeatingCapacity());
+            }
+            vehicle.setVehicleYear(request.getVehicleYear()); // nullable; may clear the year
+            vehicleRepo.save(vehicle);
+        }
+
+        // 3. Keep the application record in sync with the edited details.
+        DriverApplication app = driverAppRepo.findByDriverId(driver.getDriverId()).orElse(null);
+        if (app != null) {
+            if (request.getContactNumber() != null) {
+                app.setContactNumber(request.getContactNumber());
+            }
+            if (request.getVehicleMakeModel() != null) {
+                app.setVehicleMakeModel(request.getVehicleMakeModel());
+            }
+            if (newReg != null && !newReg.isBlank()) {
+                app.setRegistrationNumber(newReg);
+            }
+            if (request.getSeatingCapacity() > 0) {
+                app.setSeatingCapacity(request.getSeatingCapacity());
+            }
+            if (request.getVehicleColor() != null) {
+                app.setVehicleColor(request.getVehicleColor());
+            }
+            // Re-review: always send back to the admin after an edit.
+            app.setApplicationStatus("Pending Review");
+            driverAppRepo.save(app);
+        }
+
+        // Re-review: remove the verified flag until the admin re-approves.
+        driver.setIsVerified(false);
+        driverRepo.save(driver);
+
+        // Return the freshly recomputed profile (rating, trip activity and document status all
+        // reflect current data via the existing getProfile mapping).
+        return getProfile(email);
     }
 
     /**
