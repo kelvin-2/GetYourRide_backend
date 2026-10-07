@@ -18,6 +18,15 @@ import com.example1.getyourride.entity.Trip;
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     /**
+     * Total passengers a driver has carried: confirmed or boarded bookings across all of the
+     * driver's trips. Used by the driver profile activity summary.
+     */
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.trip.driver.driverId = :driverId " +
+            "AND b.bookingStatus IN (com.example1.getyourride.entity.BookingStatus.CONFIRMED, " +
+            "com.example1.getyourride.entity.BookingStatus.BOARDED)")
+    int countPassengersByDriverId(@Param("driverId") Long driverId);
+
+    /**
      * CHANGED: Added @EntityGraph so that when getMyBookings calls this, the trip's driver,
      * vehicle, and stops are loaded in one query instead of lazy-loading. Without this the
      * serializer would either hit a LazyInitializationException (if the session is closed)

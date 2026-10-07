@@ -1,5 +1,6 @@
 package com.example1.getyourride.controller;
 
+import com.example1.getyourride.dto.request.UpdateDriverProfileRequest;
 import com.example1.getyourride.dto.response.DriverProfileDeleteResponse;
 import com.example1.getyourride.dto.response.DriverProfileResponse;
 import com.example1.getyourride.service.DriverApplicationService;
@@ -33,6 +34,25 @@ public class DriverProfileController {
         String email = authentication.getName();
         DriverProfileResponse response = profileService.getProfile(email);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * PATCH /api/driver-profile
+     * Updates the authenticated driver's own profile (contact number + vehicle details).
+     * Saving resets verification and sends the application back for admin review.
+     */
+    @PatchMapping
+    public ResponseEntity<?> updateProfile(
+            Authentication authentication,
+            @RequestBody UpdateDriverProfileRequest request
+    ) {
+        try {
+            String email = authentication.getName();
+            DriverProfileResponse response = profileService.updateProfile(email, request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
+        }
     }
 
     /**

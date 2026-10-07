@@ -54,4 +54,11 @@ public class Driver {
     @Builder.Default
     @Column(name = "total_trips", nullable = false)
     private int totalTrips = 0;
+
+    // Driver availability/account state ("Active", "On Break", "Deactivated").
+    // Column already exists in shuttle_db with a default of 'Active'; mapped here so the
+    // profile can surface it. Kept nullable-safe with a default to match the DB default.
+    @Builder.Default
+    @Column(name = "status", nullable = false)
+    private String status = "Active";
 }
