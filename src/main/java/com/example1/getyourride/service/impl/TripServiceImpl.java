@@ -346,6 +346,16 @@ public class TripServiceImpl implements TripService {
     @Override
     @Transactional
     public TripResponse cancelTrip(Long tripId) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        
+        // If the caller is a student, they should only be able to cancel their own booking,
+        // not the entire trip. This is true for all students.
+        Optional<Student> studentOpt = studentRepository.findByEmail(email);
+        if (studentOpt.isPresent()) {
+            log.info("Student {} attempted to cancel trip {} via cancelTrip; redirecting to cancelBooking", email, tripId);
+            return cancelBooking(tripId);
+        }
+
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 

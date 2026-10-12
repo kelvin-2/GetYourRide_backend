@@ -68,6 +68,79 @@ class TripServiceImplTest {
     }
 
     @Test
+    void cancelTrip_Driver_CancelsEntireTrip() {
+        String email = "driver@test.com";
+        Long tripId = 1L;
+
+        // Mock security context
+        org.springframework.security.core.Authentication auth = org.mockito.Mockito.mock(org.springframework.security.core.Authentication.class);
+        when(auth.getName()).thenReturn(email);
+        org.springframework.security.core.context.SecurityContext securityContext = org.mockito.Mockito.mock(org.springframework.security.core.context.SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(auth);
+        org.springframework.security.core.context.SecurityContextHolder.setContext(securityContext);
+
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
+
+        Trip trip = new Trip();
+        trip.setTripId(tripId);
+        trip.setStatus("CONFIRMED");
+        when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+        when(tripRepository.save(any())).thenReturn(trip);
+
+        // Setup driver so mapToResponse doesn't fail
+        com.example1.getyourride.entity.Driver driver = new com.example1.getyourride.entity.Driver();
+        driver.setDriverId(10L);
+        driver.setFirstName("Driver");
+        driver.setLastName("One");
+        trip.setDriver(driver);
+
+        tripService.cancelTrip(tripId);
+
+        // Verify that cancelTrip DID update the trip status to CANCELLED
+        assertEquals("CANCELLED", trip.getStatus());
+    }
+
+    @Test
+    void cancelTrip_Student_RedirectsToCancelBooking() {
+        String email = "student@test.com";
+        Long tripId = 1L;
+
+        // Mock security context
+        org.springframework.security.core.Authentication auth = org.mockito.Mockito.mock(org.springframework.security.core.Authentication.class);
+        when(auth.getName()).thenReturn(email);
+        org.springframework.security.core.context.SecurityContext securityContext = org.mockito.Mockito.mock(org.springframework.security.core.context.SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(auth);
+        org.springframework.security.core.context.SecurityContextHolder.setContext(securityContext);
+
+        Student student = new Student();
+        student.setIsFunded(false); // Non-funded student
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+
+        Trip trip = new Trip();
+        trip.setTripId(tripId);
+        when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+
+        com.example1.getyourride.entity.Booking booking = new com.example1.getyourride.entity.Booking();
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        when(bookingRepository.findByTripAndStudent(any(), any())).thenReturn(Optional.of(booking));
+
+        // Setup driver so mapToResponse doesn't fail
+        com.example1.getyourride.entity.Driver driver = new com.example1.getyourride.entity.Driver();
+        driver.setDriverId(10L);
+        driver.setFirstName("Driver");
+        driver.setLastName("One");
+        trip.setDriver(driver);
+        trip.setAvailableSeats(3);
+
+        tripService.cancelTrip(tripId);
+
+        // Verify that cancelTrip did NOT update the trip status to CANCELLED
+        assertNotEquals("CANCELLED", trip.getStatus());
+        // Verify that booking status WAS updated to CANCELLED (via redirect to cancelBooking)
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+    }
+
+    @Test
     void searchTripsByCoordinates_CalculatesDistances() {
         String email = "funded@test.com";
         Student student = new Student();
