@@ -42,17 +42,13 @@ public class DriverProfileController {
      * Saving resets verification and sends the application back for admin review.
      */
     @PatchMapping
-    public ResponseEntity<?> updateProfile(
+    public ResponseEntity<DriverProfileResponse> updateProfile(
             Authentication authentication,
             @RequestBody UpdateDriverProfileRequest request
     ) {
-        try {
-            String email = authentication.getName();
-            DriverProfileResponse response = profileService.updateProfile(email, request);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
-        }
+        String email = authentication.getName();
+        DriverProfileResponse response = profileService.updateProfile(email, request);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -63,23 +59,15 @@ public class DriverProfileController {
      * so admin can view it when reviewing the application.
      */
     @PostMapping("/upload-document")
-    public ResponseEntity<?> uploadDocumentFromProfile(
+    public ResponseEntity<Void> uploadDocumentFromProfile(
             Authentication authentication,
             @RequestParam("documentType") String documentType,
             @RequestParam("file") MultipartFile file
-    ) {
-        try {
-            String email = authentication.getName();
-            Long applicationId = profileService.getApplicationIdByEmail(email);
-            applicationService.uploadDocument(applicationId, documentType, file);
-            return ResponseEntity.ok().build();
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(
-                    java.util.Map.of("message", "Failed to upload document: " + e.getMessage())
-            );
-        }
+    ) throws Exception {
+        String email = authentication.getName();
+        Long applicationId = profileService.getApplicationIdByEmail(email);
+        applicationService.uploadDocument(applicationId, documentType, file);
+        return ResponseEntity.ok().build();
     }
 
     /**

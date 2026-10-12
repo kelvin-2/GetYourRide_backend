@@ -5,6 +5,7 @@ import com.example1.getyourride.dto.response.VehicleResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Vehicle;
 import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.ConflictException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.VehicleRepository;
@@ -35,7 +36,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with email: " + email));
 
         if (vehicleRepository.findByRegistrationNumber(request.getRegistrationNumber()).isPresent()) {
-            throw new BadRequestException("Vehicle with registration number " + request.getRegistrationNumber() + " already exists");
+            throw new ConflictException("Vehicle with registration number " + request.getRegistrationNumber() + " already exists");
         }
 
         Vehicle vehicle = new Vehicle();

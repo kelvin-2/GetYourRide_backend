@@ -3,6 +3,7 @@ package com.example1.getyourride.controller;
 import com.example1.getyourride.dto.request.GeocodeRequest;
 import com.example1.getyourride.dto.response.AddressSuggestion;
 import com.example1.getyourride.dto.response.GeocodeResponse;
+import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.service.GeocodingService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +24,7 @@ public class GeocodingController {
     @PostMapping
     public ResponseEntity<GeocodeResponse> geocode(@RequestBody GeocodeRequest request) {
         if (request.getAddress() == null || request.getAddress().isBlank()) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Address is required for geocoding.");
         }
         return ResponseEntity.ok(geocodingService.geocode(request.getAddress()));
     }

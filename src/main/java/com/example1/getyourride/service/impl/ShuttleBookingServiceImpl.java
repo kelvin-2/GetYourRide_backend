@@ -193,6 +193,22 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
             throw new ConflictException("Student already boarded");
         }
 
+        if (booking.getBookingStatus() == BookingStatus.NO_SHOW || 
+            booking.getBookingStatus() == BookingStatus.CANCELLED ||
+            "COMPLETED".equalsIgnoreCase(booking.getTrip().getStatus())) {
+            throw new BadRequestException("Cannot board: booking or trip is in a final state");
+        }
+
+        // Additional check for slot time expiration
+        Trip trip = booking.getTrip();
+        if (trip.getTimeSlot() != null && trip.getTimeSlot().getArrives() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime slotEnd = trip.getDepartureTime().toLocalDate().atTime(trip.getTimeSlot().getArrives());
+            if (slotEnd.isBefore(now)) {
+                throw new BadRequestException("Cannot board: Time slot has ended");
+            }
+        }
+
         booking.setBookingStatus(BookingStatus.BOARDED);
         bookingRepository.save(booking);
 

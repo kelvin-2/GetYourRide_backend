@@ -256,6 +256,25 @@ public class ShuttleDriverService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found with ID: " + bookingId));
 
+        Trip trip = booking.getTrip();
+        if ("COMPLETED".equalsIgnoreCase(trip.getStatus())) {
+            return MarkAsBoardedResponse.builder()
+                    .success(false)
+                    .message("Cannot board: Trip is already completed")
+                    .build();
+        }
+
+        if (trip.getTimeSlot() != null && trip.getTimeSlot().getArrives() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime slotEnd = trip.getDepartureTime().toLocalDate().atTime(trip.getTimeSlot().getArrives());
+            if (slotEnd.isBefore(now)) {
+                return MarkAsBoardedResponse.builder()
+                        .success(false)
+                        .message("Cannot board: Time slot has ended")
+                        .build();
+            }
+        }
+
         // Find or create boarding log
         Optional<BoardingLog> existingLog = boardingLogRepository.findByBooking(booking);
         BoardingLog log;

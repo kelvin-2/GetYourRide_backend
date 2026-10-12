@@ -1,6 +1,7 @@
 package com.example1.getyourride.config;
 
 import com.example1.getyourride.security.JwtAuthFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -12,7 +13,7 @@ class SecurityConfigTest {
 
     @Test
     void passwordEncoderBeanShouldBeAvailable() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthFilter.class));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthFilter.class), mock(ObjectMapper.class));
 
         PasswordEncoder passwordEncoder = config.passwordEncoder();
 

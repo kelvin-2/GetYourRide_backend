@@ -4,6 +4,8 @@ import com.example1.getyourride.dto.request.DriverLoginRequest;
 import com.example1.getyourride.dto.request.DriverRegisterRequest;
 import com.example1.getyourride.dto.response.AuthResponse;
 import com.example1.getyourride.entity.Driver;
+import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.ConflictException;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.security.JwtUtil;
@@ -46,12 +48,12 @@ public class DriverAuthServiceImpl implements DriverAuthService {
     public AuthResponse register(DriverRegisterRequest request) {
         // Check if email is already taken in Driver table
         if (driverRepo.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalStateException("Email is already registered as a driver.");
+            throw new ConflictException("Email is already registered as a driver.");
         }
 
         // Check if email is already taken in Student table
         if (studentRepo.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalStateException("Email is already registered as a student.");
+            throw new ConflictException("Email is already registered as a student.");
         }
 
         // Build & save driver entity
@@ -100,11 +102,11 @@ public class DriverAuthServiceImpl implements DriverAuthService {
     @Transactional(readOnly = true)
     public AuthResponse login(DriverLoginRequest request) {
         Driver driver = driverRepo.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Driver account does not exist."));
+                .orElseThrow(() -> new BadRequestException("Driver account does not exist."));
 
         // Validate password
         if (!passwordEncoder.matches(request.getPassword(), driver.getPassword()) && !request.getPassword().equals(driver.getPassword())) {
-            throw new IllegalArgumentException("Invalid email or password.");
+            throw new BadRequestException("Invalid email or password.");
         }
 
         // Null-safe boolean verification check
