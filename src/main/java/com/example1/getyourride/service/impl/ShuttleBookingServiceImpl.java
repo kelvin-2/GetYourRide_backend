@@ -53,6 +53,15 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
             throw new BadRequestException("This endpoint is only for shuttle bookings");
         }
 
+        // Seeded shuttle trips were created with available_seats = NULL. Unboxing that into
+        // the <= 0 check below threw a NullPointerException (HTTP 500) and no booking was ever
+        // created. Initialise the seat count from the vehicle capacity the first time a shuttle
+        // is booked, so capacity is still enforced from then on.
+        if (trip.getAvailableSeats() == null) {
+            int capacity = trip.getVehicle() != null ? trip.getVehicle().getCapacity() : 0;
+            trip.setAvailableSeats(capacity);
+        }
+
         if (trip.getAvailableSeats() <= 0) {
             throw new ConflictException("There are no more shuttles try next slot");
         }
