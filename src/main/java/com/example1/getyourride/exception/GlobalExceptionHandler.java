@@ -3,11 +3,12 @@ package com.example1.getyourride.exception;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
-import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -15,67 +16,67 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(BadRequestException ex) {
-        Map<String, String> body = new HashMap<>();
-        body.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        log.error("Bad Request: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
-        Map<String, String> body = new HashMap<>();
-        body.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        log.error("Illegal Argument: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
-        Map<String, String> body = new HashMap<>();
-        body.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        log.error("Illegal State: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<Map<String, String>> handleConflict(ConflictException ex) {
-        Map<String, String> body = new HashMap<>();
-        body.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        log.error("Conflict: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<Map<String, String>> handleSecurity(SecurityException ex) {
+        log.error("Security Exception: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleNotFound(ResourceNotFoundException ex) {
-        Map<String, String> body = new HashMap<>();
-        body.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+        log.error("Resource Not Found: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        Map<String, String> body = new HashMap<>();
-        body.put("error", "Database error: A record with this information already exists.");
-        // Log the actual exception in a real scenario
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        log.error("Data Integrity Violation: ", ex);
+        return buildErrorResponse("A record with this information already exists.", HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
+        log.error("Validation Failure: {}", ex.getMessage());
+        FieldError fieldError = ex.getBindingResult().getFieldError();
+        String message = (fieldError != null) ? fieldError.getDefaultMessage() : "Invalid input parameters.";
+        return buildErrorResponse(message, HttpStatus.BAD_REQUEST);
+    }
 
-        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            errors.put(error.getField(), error.getDefaultMessage());
-        }
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGeneralException(Exception ex) {
+        log.error("Unexpected error occurred: ", ex);
+        return buildErrorResponse("Something went wrong. Please try again.", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
-        // Class-level constraints (for example @ValidCoordinates) produce errors that are
-        // not tied to a field unless the validator explicitly attaches a property node.
-        // Those land in getGlobalErrors() and were previously discarded, which meant a
-        // request could be rejected with a 400 carrying an empty body - the caller had no
-        // idea what was wrong. Anything not already reported as a field error is included
-        // here under its object name so no validation message is ever silently lost.
-        for (ObjectError error : ex.getBindingResult().getGlobalErrors()) {
-            errors.putIfAbsent(error.getObjectName(), error.getDefaultMessage());
-        }
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+    private ResponseEntity<Map<String, String>> buildErrorResponse(String message, HttpStatus status) {
+        Map<String, String> body = new HashMap<>();
+        body.put("error", message);
+        return ResponseEntity.status(status).body(body);
     }
 }

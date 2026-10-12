@@ -44,4 +44,11 @@ public class TripBookingResponse {
      * BookingStatus enum serialised through BookingStatusConverter.
      */
     private String bookingStatus;
+
+    /**
+     * Whether the student has boarded the shuttle.
+     * Maps to whether a BoardingLog exists with a non-null boardedAt for this booking.
+     */
+    @Builder.Default
+    private boolean boarded = false;
 }

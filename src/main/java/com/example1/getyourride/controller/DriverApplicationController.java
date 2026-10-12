@@ -41,24 +41,16 @@ public class DriverApplicationController {
      * retrieve this URL to view the uploaded document directly.
      */
     @PostMapping("/{applicationId}/documents")
-    public ResponseEntity<?> uploadDocument(
+    public ResponseEntity<Map<String, String>> uploadDocument(
             @PathVariable Long applicationId,
             @RequestParam("documentType") String documentType,
             @RequestParam("file") MultipartFile file
-    ) {
-        try {
-            service.uploadDocument(applicationId, documentType, file);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Document uploaded successfully.",
-                    "documentType", documentType
-            ));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to upload document: " + e.getMessage()
-            ));
-        }
+    ) throws Exception {
+        service.uploadDocument(applicationId, documentType, file);
+        return ResponseEntity.ok(Map.of(
+                "message", "Document uploaded successfully.",
+                "documentType", documentType
+        ));
     }
 
     /**

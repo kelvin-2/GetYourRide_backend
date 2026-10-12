@@ -3,6 +3,7 @@ package com.example1.getyourride.service;
 import com.example1.getyourride.dto.response.AdminDriverApplicationResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.DriverApplication;
+import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.DriverApplicationRepository;
 import com.example1.getyourride.repository.DriverRepository;
 import org.springframework.stereotype.Service;
@@ -60,7 +61,7 @@ public class AdminDriverApplicationService {
     @Transactional(readOnly = true)
     public AdminDriverApplicationResponse getApplicationById(Long applicationId) {
         DriverApplication app = driverAppRepo.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Application not found with ID: " + applicationId));
         return toAdminResponse(app);
     }
@@ -71,7 +72,7 @@ public class AdminDriverApplicationService {
     @Transactional
     public AdminDriverApplicationResponse approveApplication(Long applicationId) {
         DriverApplication app = driverAppRepo.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Application not found with ID: " + applicationId));
 
         app.setApplicationStatus("Approved");
@@ -94,7 +95,7 @@ public class AdminDriverApplicationService {
     @Transactional
     public AdminDriverApplicationResponse rejectApplication(Long applicationId, String reason) {
         DriverApplication app = driverAppRepo.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Application not found with ID: " + applicationId));
 
         app.setApplicationStatus("Rejected");

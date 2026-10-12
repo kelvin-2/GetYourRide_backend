@@ -19,6 +19,7 @@ import com.example1.getyourride.dto.request.OfferRideRequest;
 import com.example1.getyourride.dto.response.OfferRideResponse;
 import com.example1.getyourride.dto.response.TripBookingResponse;
 import com.example1.getyourride.dto.response.TripResponse;
+import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.service.TripService;
 
 import jakarta.validation.Valid;
@@ -195,7 +196,7 @@ public class TripController {
             return ResponseEntity.ok(tripService.searchTrips(departure, destination, email));
         }
 
-        return ResponseEntity.badRequest().build();
+        throw new BadRequestException("Missing search parameters. Provide either coordinates or departure/destination addresses.");
     }
     /**
      * POST /api/trips/offer

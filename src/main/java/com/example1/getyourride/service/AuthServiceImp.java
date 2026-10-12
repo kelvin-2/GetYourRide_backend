@@ -3,6 +3,7 @@ package com.example1.getyourride.service;
 import com.example1.getyourride.dto.response.AuthResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
+import com.example1.getyourride.exception.BadRequestException;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.security.JwtUtil;
@@ -62,7 +63,7 @@ public class AuthServiceImp {
 
             // Validate password against hashed password in DB
             if (!passwordEncoder.matches(password, student.getPassword())) {
-                throw new IllegalArgumentException("Invalid email or password.");
+                throw new BadRequestException("Invalid email or password.");
             }
 
             // Generate JWT Token for Student
@@ -93,7 +94,7 @@ public class AuthServiceImp {
 
             // Validate password
             if (!passwordEncoder.matches(password, driver.getPassword())) {
-                throw new IllegalArgumentException("Invalid email or password.");
+                throw new BadRequestException("Invalid email or password.");
             }
 
             // Determine driver status (Boolean null-safe check)
@@ -122,6 +123,6 @@ public class AuthServiceImp {
         }
 
         // 3. Email not found in either table
-        throw new IllegalArgumentException("Account does not exist.");
+        throw new BadRequestException("Account does not exist.");
     }
 }

@@ -8,6 +8,8 @@ import com.example1.getyourride.dto.response.DriverApplicationResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.DriverApplication;
 import com.example1.getyourride.entity.Vehicle;
+import com.example1.getyourride.exception.ConflictException;
+import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.DriverApplicationRepository;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.VehicleRepository;
@@ -65,7 +67,7 @@ public class DriverApplicationService {
 
         // 2. Check if this email already exists in the driver table
         if (driverRepo.findByEmail(normalizedEmail).isPresent()) {
-            throw new IllegalStateException("A driver account with this email already exists.");
+            throw new ConflictException("A driver account with this email already exists.");
         }
 
         // 3. Create a new driver record
@@ -127,7 +129,7 @@ public class DriverApplicationService {
     @Transactional
     public void uploadDocument(Long applicationId, String documentType, MultipartFile file) throws IOException {
         DriverApplication app = driverAppRepo.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + applicationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Application not found with ID: " + applicationId));
 
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be empty.");
@@ -192,10 +194,10 @@ public class DriverApplicationService {
     @Transactional(readOnly = true)
     public AuthResponse finalizeApplication(Long applicationId) {
         DriverApplication app = driverAppRepo.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + applicationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Application not found with ID: " + applicationId));
 
         Driver driver = driverRepo.findById(app.getDriverId())
-                .orElseThrow(() -> new IllegalArgumentException("Driver not found with ID: " + app.getDriverId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with ID: " + app.getDriverId()));
 
         // Generate JWT
         String token = jwtUtil.generateToken(

@@ -58,13 +58,9 @@ public class AdminDriverApplicationController {
      * are direct links — admin clicks them and the document opens in the browser.
      */
     @GetMapping("/{applicationId}")
-    public ResponseEntity<?> getApplicationById(@PathVariable Long applicationId) {
-        try {
-            AdminDriverApplicationResponse response = service.getApplicationById(applicationId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+    public ResponseEntity<AdminDriverApplicationResponse> getApplicationById(@PathVariable Long applicationId) {
+        AdminDriverApplicationResponse response = service.getApplicationById(applicationId);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -73,20 +69,16 @@ public class AdminDriverApplicationController {
      * Opens the image in the browser.
      */
     @GetMapping("/{applicationId}/documents/licence")
-    public ResponseEntity<?> viewDriversLicence(@PathVariable Long applicationId) {
-        try {
-            AdminDriverApplicationResponse app = service.getApplicationById(applicationId);
-            String url = app.getDriversLicenceUrl();
-            if (url == null || url.isBlank()) {
-                return ResponseEntity.notFound().build();
-            }
-            // Redirect to Cloudinary URL — browser will display the image
-            return ResponseEntity.status(302)
-                    .header("Location", url)
-                    .build();
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    public ResponseEntity<Void> viewDriversLicence(@PathVariable Long applicationId) {
+        AdminDriverApplicationResponse app = service.getApplicationById(applicationId);
+        String url = app.getDriversLicenceUrl();
+        if (url == null || url.isBlank()) {
+            return ResponseEntity.notFound().build();
         }
+        // Redirect to Cloudinary URL — browser will display the image
+        return ResponseEntity.status(302)
+                .header("Location", url)
+                .build();
     }
 
     /**
@@ -95,20 +87,16 @@ public class AdminDriverApplicationController {
      * Opens the image in the browser.
      */
     @GetMapping("/{applicationId}/documents/registration")
-    public ResponseEntity<?> viewVehicleRegistration(@PathVariable Long applicationId) {
-        try {
-            AdminDriverApplicationResponse app = service.getApplicationById(applicationId);
-            String url = app.getVehicleRegistrationUrl();
-            if (url == null || url.isBlank()) {
-                return ResponseEntity.notFound().build();
-            }
-            // Redirect to Cloudinary URL — browser will display the image
-            return ResponseEntity.status(302)
-                    .header("Location", url)
-                    .build();
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    public ResponseEntity<Void> viewVehicleRegistration(@PathVariable Long applicationId) {
+        AdminDriverApplicationResponse app = service.getApplicationById(applicationId);
+        String url = app.getVehicleRegistrationUrl();
+        if (url == null || url.isBlank()) {
+            return ResponseEntity.notFound().build();
         }
+        // Redirect to Cloudinary URL — browser will display the image
+        return ResponseEntity.status(302)
+                .header("Location", url)
+                .build();
     }
 
     /**
@@ -116,13 +104,9 @@ public class AdminDriverApplicationController {
      * Approve a driver application. This also marks the driver as verified.
      */
     @PutMapping("/{applicationId}/approve")
-    public ResponseEntity<?> approveApplication(@PathVariable Long applicationId) {
-        try {
-            AdminDriverApplicationResponse response = service.approveApplication(applicationId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+    public ResponseEntity<AdminDriverApplicationResponse> approveApplication(@PathVariable Long applicationId) {
+        AdminDriverApplicationResponse response = service.approveApplication(applicationId);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -130,16 +114,12 @@ public class AdminDriverApplicationController {
      * Reject a driver application.
      */
     @PutMapping("/{applicationId}/reject")
-    public ResponseEntity<?> rejectApplication(
+    public ResponseEntity<AdminDriverApplicationResponse> rejectApplication(
             @PathVariable Long applicationId,
             @RequestBody(required = false) Map<String, String> body
     ) {
-        try {
-            String reason = (body != null) ? body.getOrDefault("reason", "") : "";
-            AdminDriverApplicationResponse response = service.rejectApplication(applicationId, reason);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+        String reason = (body != null) ? body.getOrDefault("reason", "") : "";
+        AdminDriverApplicationResponse response = service.rejectApplication(applicationId, reason);
+        return ResponseEntity.ok(response);
     }
 }
