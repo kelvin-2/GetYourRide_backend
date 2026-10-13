@@ -38,6 +38,7 @@ public class TripResponse {
     private Integer availableSeats;
     private BigDecimal price;
     private String status;
+    private Double driverRating;
 
     /**
      * CHANGED (Phase 4 — booking wiring): added bookingId so the frontend can reference the

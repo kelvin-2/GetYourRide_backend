@@ -42,7 +42,7 @@ public class DriverProfileResponse {
     private String accountStatus;    // driver.status ("Active", "On Break", "Deactivated")
 
     // 5. Ratings & reviews (aggregated from trip_review via trip_booking -> trip)
-    private double averageRating;    // mean rating 1-5, 0 when no reviews yet
+    private Double averageRating;    // mean rating 1-5, null when no reviews yet
     private int reviewCount;         // number of ratings
     private List<String> reviewTags; // distinct tags across this driver's reviews
 
