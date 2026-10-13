@@ -41,6 +41,7 @@ import com.example1.getyourride.repository.BookingRepository;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
+import com.example1.getyourride.repository.TripReviewRepository;
 import com.example1.getyourride.repository.VehicleRepository;
 import com.example1.getyourride.service.GeocodingService;
 import com.example1.getyourride.service.NotificationService;
@@ -63,6 +64,7 @@ public class TripServiceImpl implements TripService {
     private final TripRouteService tripRouteService;
     private final NotificationService notificationService;
     private final BoardingLogRepository boardingLogRepository;
+    private final TripReviewRepository tripReviewRepository;
 
     public TripServiceImpl(TripRepository tripRepository,
                            DriverRepository driverRepository,
@@ -73,7 +75,8 @@ public class TripServiceImpl implements TripService {
                            TripSimulationService tripSimulationService,
                            TripRouteService tripRouteService,
                            NotificationService notificationService,
-                           BoardingLogRepository boardingLogRepository) {
+                           BoardingLogRepository boardingLogRepository,
+                           TripReviewRepository tripReviewRepository) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
@@ -84,6 +87,7 @@ public class TripServiceImpl implements TripService {
         this.tripRouteService = tripRouteService;
         this.notificationService = notificationService;
         this.boardingLogRepository = boardingLogRepository;
+        this.tripReviewRepository = tripReviewRepository;
     }
 
     @Override
@@ -547,6 +551,9 @@ public class TripServiceImpl implements TripService {
             builder.slotTime(slotStr);
         }
 
+        Double avg = tripReviewRepository.findAverageRatingByDriverId(trip.getDriver().getDriverId());
+        Double driverRating = avg != null ? Math.round(avg * 10.0) / 10.0 : null;
+
         return builder
                 .tripType(trip.getTripType())
                 .departureStop(trip.getDepartureStop())
@@ -560,6 +567,7 @@ public class TripServiceImpl implements TripService {
                 .availableSeats(trip.getAvailableSeats())
                 .price(trip.getPrice())
                 .status(trip.getStatus())
+                .driverRating(driverRating)
                 // Live tracking state, so this response doubles as the polling fallback for a
                 // client whose WebSocket has dropped. Null until the trip starts moving.
                 .currentLat(trip.getCurrentLat())

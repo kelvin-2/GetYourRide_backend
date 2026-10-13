@@ -99,7 +99,7 @@ public class DriverProfileService {
 
         // ── Ratings & reviews aggregation (empty-safe) ──
         Double avg = tripReviewRepo.findAverageRatingByDriverId(driverId);
-        double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0; // 1dp, 0 when none
+        Double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : null; // 1dp, null when none
         int reviewCount = tripReviewRepo.countByDriverId(driverId);
         List<String> reviewTags = tripReviewRepo.findDistinctTagsByDriverId(driverId);
         if (reviewTags == null) {
