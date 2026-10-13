@@ -180,6 +180,15 @@ public class DriverProfileService {
         Driver driver = driverRepo.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver profile not found."));
 
+        // 0. Block edits while a trip is live. An IN_PROGRESS trip is physically on the road and is
+        //    being tracked/simulated; changing the vehicle (plate, capacity, model) or sending the
+        //    application back for re-review mid-trip would desync the live trip and the admin state.
+        //    SCHEDULED/CONFIRMED trips are not yet underway, so they do not block editing.
+        if (tripRepo.countByDriverIdAndStatus(driver.getDriverId(), "IN_PROGRESS") > 0) {
+            throw new ConflictException(
+                    "You can't edit your profile while a trip is live. Please finish your current trip first.");
+        }
+
         // 1. Personal: contact number is the only editable personal field.
         if (request.getContactNumber() != null) {
             driver.setPhone(request.getContactNumber());
