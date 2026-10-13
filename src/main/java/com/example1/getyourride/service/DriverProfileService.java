@@ -8,6 +8,8 @@ import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.DriverApplication;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.Vehicle;
+import com.example1.getyourride.exception.ConflictException;
+import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.BoardingLogRepository;
 import com.example1.getyourride.repository.BookingRepository;
 import com.example1.getyourride.repository.DriverApplicationRepository;
@@ -59,7 +61,7 @@ public class DriverProfileService {
     @Transactional(readOnly = true)
     public DriverProfileResponse getProfile(String email) {
         Driver driver = driverRepo.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Driver profile not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("Driver profile not found."));
 
         // Fetch application state
         DriverApplication app = driverAppRepo.findByDriverId(driver.getDriverId())
@@ -176,7 +178,7 @@ public class DriverProfileService {
     @Transactional
     public DriverProfileResponse updateProfile(String email, UpdateDriverProfileRequest request) {
         Driver driver = driverRepo.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Driver profile not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("Driver profile not found."));
 
         // 1. Personal: contact number is the only editable personal field.
         if (request.getContactNumber() != null) {
@@ -194,7 +196,7 @@ public class DriverProfileService {
                 boolean belongsToSomeoneElse = existing.getDriver() == null
                         || !existing.getDriver().getDriverId().equals(driver.getDriverId());
                 if (belongsToSomeoneElse) {
-                    throw new IllegalArgumentException(
+                    throw new ConflictException(
                             "That registration number is already in use by another vehicle.");
                 }
             });
@@ -272,7 +274,7 @@ public class DriverProfileService {
     @Transactional
     public DriverProfileDeleteResponse deactivateProfile(String email) {
         Driver driver = driverRepo.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Driver not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found."));
 
         Long driverId = driver.getDriverId();
 
@@ -309,10 +311,10 @@ public class DriverProfileService {
 @Transactional(readOnly = true)
 public Long getApplicationIdByEmail(String email) {
     Driver driver = driverRepo.findByEmail(email)
-            .orElseThrow(() -> new IllegalArgumentException("Driver not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("Driver not found."));
 
     DriverApplication app = driverAppRepo.findByDriverId(driver.getDriverId())
-            .orElseThrow(() -> new IllegalArgumentException("No application record found for driver."));
+            .orElseThrow(() -> new ResourceNotFoundException("No application record found for driver."));
 
     return app.getApplicationId();
 }

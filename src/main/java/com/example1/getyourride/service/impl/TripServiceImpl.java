@@ -34,7 +34,9 @@ import com.example1.getyourride.entity.TripStop;
 import com.example1.getyourride.entity.TripStopStatus;
 import com.example1.getyourride.entity.Vehicle;
 import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.ConflictException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
+import com.example1.getyourride.repository.BoardingLogRepository;
 import com.example1.getyourride.repository.BookingRepository;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
@@ -60,6 +62,7 @@ public class TripServiceImpl implements TripService {
     private final TripSimulationService tripSimulationService;
     private final TripRouteService tripRouteService;
     private final NotificationService notificationService;
+    private final BoardingLogRepository boardingLogRepository;
 
     public TripServiceImpl(TripRepository tripRepository,
                            DriverRepository driverRepository,
@@ -69,7 +72,8 @@ public class TripServiceImpl implements TripService {
                            GeocodingService geocodingService,
                            TripSimulationService tripSimulationService,
                            TripRouteService tripRouteService,
-                           NotificationService notificationService) {
+                           NotificationService notificationService,
+                           BoardingLogRepository boardingLogRepository) {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.studentRepository = studentRepository;
@@ -79,6 +83,7 @@ public class TripServiceImpl implements TripService {
         this.tripSimulationService = tripSimulationService;
         this.tripRouteService = tripRouteService;
         this.notificationService = notificationService;
+        this.boardingLogRepository = boardingLogRepository;
     }
 
     @Override
@@ -210,7 +215,7 @@ public class TripServiceImpl implements TripService {
         // and decrements available seats a second time.
         Optional<Booking> existingBooking = bookingRepository.findByTripAndStudent(trip, student);
         if (existingBooking.isPresent() && existingBooking.get().getBookingStatus() != BookingStatus.CANCELLED) {
-            throw new BadRequestException("You have already booked this trip");
+            throw new ConflictException("You have already booked this trip");
         }
 
         if (log.isDebugEnabled()) {
@@ -346,6 +351,16 @@ public class TripServiceImpl implements TripService {
     @Override
     @Transactional
     public TripResponse cancelTrip(Long tripId) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        
+        // If the caller is a student, they should only be able to cancel their own booking,
+        // not the entire trip. This is true for all students.
+        Optional<Student> studentOpt = studentRepository.findByEmail(email);
+        if (studentOpt.isPresent()) {
+            log.info("Student {} attempted to cancel trip {} via cancelTrip; redirecting to cancelBooking", email, tripId);
+            return cancelBooking(tripId);
+        }
+
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
@@ -644,7 +659,9 @@ public class TripServiceImpl implements TripService {
                         "No booking found for student " + email + " on trip " + tripId));
 
         // Idempotent: if already cancelled, just return current state.
-        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED || 
+            booking.getBookingStatus() == BookingStatus.NO_SHOW ||
+            "COMPLETED".equalsIgnoreCase(trip.getStatus())) {
             TripResponse response = mapToResponse(trip);
             response.setBookingId(booking.getBookingId());
             response.setBookingStatus(BookingStatus.CANCELLED.name());
@@ -705,12 +722,18 @@ public class TripServiceImpl implements TripService {
                 .sorted(Comparator.comparing(
                         (Booking b) -> b.getBookingDate() != null ? b.getBookingDate() : LocalDateTime.MIN)
                         .reversed())
-                .map(booking -> TripBookingResponse.builder()
+                .map(booking -> {
+                    boolean boarded = boardingLogRepository.findByBooking(booking)
+                            .map(log -> log.getBoardedAt() != null)
+                            .orElse(false);
+                    return TripBookingResponse.builder()
                         .bookingId(booking.getBookingId())
                         .trip(mapToResponse(booking.getTrip()))
                         .bookingDate(booking.getBookingDate())
                         .bookingStatus(booking.getBookingStatus() != null ? booking.getBookingStatus().name() : null)
-                        .build())
+                        .boarded(boarded)
+                        .build();
+                })
                 .collect(Collectors.toList());
     }
 }

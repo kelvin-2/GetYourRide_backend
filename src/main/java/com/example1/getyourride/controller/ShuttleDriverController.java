@@ -38,13 +38,9 @@ public class ShuttleDriverController {
      * - Trip statistics (scheduled, in progress, completed, cancelled)
      */
     @GetMapping("/shuttle-driver/profile/{driverId}")
-    public ResponseEntity<?> getProfile(@PathVariable Long driverId) {
-        try {
-            ShuttleDriverProfileResponse profile = shuttleDriverService.getProfile(driverId);
-            return ResponseEntity.ok(profile);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
+    public ResponseEntity<ShuttleDriverProfileResponse> getProfile(@PathVariable Long driverId) {
+        ShuttleDriverProfileResponse profile = shuttleDriverService.getProfile(driverId);
+        return ResponseEntity.ok(profile);
     }
 
     /**
@@ -55,13 +51,9 @@ public class ShuttleDriverController {
      * Returns 404 if no active trip exists (app shows "No Active Trip" screen).
      */
     @GetMapping("/shuttle-driver/{driverId}/active-trip")
-    public ResponseEntity<?> getActiveTrip(@PathVariable Long driverId) {
-        try {
-            ActiveTripResponse trip = shuttleDriverService.getActiveTrip(driverId);
-            return ResponseEntity.ok(trip);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
+    public ResponseEntity<ActiveTripResponse> getActiveTrip(@PathVariable Long driverId) {
+        ActiveTripResponse trip = shuttleDriverService.getActiveTrip(driverId);
+        return ResponseEntity.ok(trip);
     }
 
     /**
@@ -71,13 +63,9 @@ public class ShuttleDriverController {
      * Called after active-trip returns a tripId.
      */
     @GetMapping("/shuttle-driver/trip/{tripId}/students")
-    public ResponseEntity<?> getBookedStudents(@PathVariable Long tripId) {
-        try {
-            List<BoardedStudentResponse> students = shuttleDriverService.getBookedStudents(tripId);
-            return ResponseEntity.ok(students);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
+    public ResponseEntity<List<BoardedStudentResponse>> getBookedStudents(@PathVariable Long tripId) {
+        List<BoardedStudentResponse> students = shuttleDriverService.getBookedStudents(tripId);
+        return ResponseEntity.ok(students);
     }
 
     /**
@@ -90,13 +78,9 @@ public class ShuttleDriverController {
      * Response: { "success": true, "message": "...", "boardedAt": "12:35" }
      */
     @PostMapping("/shuttle-driver/boarding/mark")
-    public ResponseEntity<?> markAsBoarded(@RequestBody MarkAsBoardedRequest request) {
-        try {
-            MarkAsBoardedResponse result = shuttleDriverService.markAsBoarded(request.getBookingId());
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        }
+    public ResponseEntity<MarkAsBoardedResponse> markAsBoarded(@RequestBody MarkAsBoardedRequest request) {
+        MarkAsBoardedResponse result = shuttleDriverService.markAsBoarded(request.getBookingId());
+        return ResponseEntity.ok(result);
     }
 
     /**
@@ -112,12 +96,8 @@ public class ShuttleDriverController {
      * This is a permanent, irreversible operation.
      */
     @DeleteMapping("/shuttle-driver/profile/{driverId}")
-    public ResponseEntity<?> deleteProfile(@PathVariable Long driverId) {
-        try {
-            shuttleDriverService.deleteProfile(driverId);
-            return ResponseEntity.ok("Driver profile and all associated data deleted successfully");
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
+    public ResponseEntity<String> deleteProfile(@PathVariable Long driverId) {
+        shuttleDriverService.deleteProfile(driverId);
+        return ResponseEntity.ok("Driver profile and all associated data deleted successfully");
     }
 }

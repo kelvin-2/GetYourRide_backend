@@ -9,6 +9,7 @@ import com.example1.getyourride.entity.Student;
 import com.example1.getyourride.entity.Trip;
 import com.example1.getyourride.entity.TripReview;
 import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.ConflictException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.BookingRepository;
 import com.example1.getyourride.repository.DriverRepository;
@@ -53,7 +54,7 @@ public class TripReviewServiceImpl implements TripReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
 
         if (!booking.getStudent().getStudentId().equals(student.getStudentId())) {
-            throw new BadRequestException("You can only rate your own trips");
+            throw new SecurityException("You can only rate your own trips");
         }
 
         if (booking.getBookingStatus() != BookingStatus.BOARDED && !"COMPLETED".equalsIgnoreCase(booking.getTrip().getStatus())) {
@@ -61,7 +62,7 @@ public class TripReviewServiceImpl implements TripReviewService {
         }
 
         if (tripReviewRepository.findByBookingBookingId(request.getBookingId()).isPresent()) {
-            throw new BadRequestException("You have already rated this trip");
+            throw new ConflictException("You have already rated this trip");
         }
 
         TripReview review = new TripReview();
@@ -85,7 +86,7 @@ public class TripReviewServiceImpl implements TripReviewService {
         // Ownership check: a driver may only view reviews for their own trips.
         if (trip.getDriver() == null
                 || !trip.getDriver().getDriverId().equals(driver.getDriverId())) {
-            throw new BadRequestException("You can only view ratings for your own trips");
+            throw new SecurityException("You can only view ratings for your own trips");
         }
 
         return tripReviewRepository.findByBooking_Trip_TripIdOrderByReviewDateDesc(tripId)

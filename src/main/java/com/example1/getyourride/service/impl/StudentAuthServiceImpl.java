@@ -5,6 +5,8 @@ import com.example1.getyourride.dto.request.StudentRegisterRequest;
 import com.example1.getyourride.dto.response.AuthResponse;
 import com.example1.getyourride.entity.Driver;
 import com.example1.getyourride.entity.Student;
+import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.ConflictException;
 import com.example1.getyourride.repository.DriverRepository;
 import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.security.JwtUtil;
@@ -41,17 +43,17 @@ public class StudentAuthServiceImpl implements StudentAuthService {
     public AuthResponse register(StudentRegisterRequest request) {
         // Check if email is already taken in Student table
         if (studentRepo.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalStateException("Email is already registered as a student.");
+            throw new ConflictException("Email is already registered as a student.");
         }
 
         // Check if email is already taken in Driver table
         if (driverRepo.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalStateException("Email is already registered as a driver.");
+            throw new ConflictException("Email is already registered as a driver.");
         }
 
         // Check if student number is already taken
         if (studentRepo.existsByStudentNumber(request.getStudentNumber())) {
-            throw new IllegalStateException("Student number " + request.getStudentNumber() + " is already registered.");
+            throw new ConflictException("Student number " + request.getStudentNumber() + " is already registered.");
         }
 
         // Build & save student entity
@@ -101,7 +103,7 @@ public class StudentAuthServiceImpl implements StudentAuthService {
             Student student = studentOpt.get();
 
             if (!passwordEncoder.matches(password, student.getPassword()) && !password.equals(student.getPassword())) {
-                throw new IllegalArgumentException("Invalid email or password.");
+                throw new BadRequestException("Invalid email or password.");
             }
 
             String token = jwtUtil.generateToken(
@@ -133,11 +135,11 @@ public class StudentAuthServiceImpl implements StudentAuthService {
 
             // BLOCK DEACTIVATED ACCOUNTS HERE
             if ("DEACTIVATED".equalsIgnoreCase(driver.getRole())) {
-                throw new IllegalArgumentException("This account has been deactivated. Contact support if you need help.");
+                throw new BadRequestException("This account has been deactivated. Contact support if you need help.");
             }
 
             if (!passwordEncoder.matches(password, driver.getPassword()) && !password.equals(driver.getPassword())) {
-                throw new IllegalArgumentException("Invalid email or password.");
+                throw new BadRequestException("Invalid email or password.");
             }
 
             boolean isVerified = Boolean.TRUE.equals(driver.getIsVerified());
@@ -176,6 +178,6 @@ public class StudentAuthServiceImpl implements StudentAuthService {
         }
 
         // 3. User email not found in either table
-        throw new IllegalArgumentException("Account does not exist.");
+        throw new BadRequestException("Account does not exist.");
     }
 }
