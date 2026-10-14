@@ -33,6 +33,11 @@ public class DriverProfileResponse {
     private String driversLicenceStatus;
     private String vehicleRegistrationStatus;
 
+    // 3b. Rejection details (from driverapplications)
+    private String rejectionReason; // read from the rejection_reason column
+    private String reviewedBy;      // admin who reviewed the application
+    private String reviewedAt;      // when the review happened
+
     // ── NEW: feature additions (all read-only, from existing shuttle_db data) ──
 
     // 4. Driver stats (from the `driver` row)

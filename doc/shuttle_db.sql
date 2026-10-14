@@ -98,6 +98,10 @@ CREATE TABLE `driverapplications` (
   `license_image_path` varchar(255) NOT NULL DEFAULT '',
   `registration_file_path` varchar(255) NOT NULL DEFAULT '',
   `application_status` varchar(255) DEFAULT NULL,
+  `rejection_reason` varchar(1000) DEFAULT NULL,
+  `reviewed_by` varchar(255) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `driver_notified` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`ApplicationID`),
   KEY `fk_application_driver` (`driver_id`),
   CONSTRAINT `fk_application_driver` FOREIGN KEY (`driver_id`) REFERENCES `driver` (`driver_id`) ON DELETE CASCADE
@@ -110,7 +114,7 @@ CREATE TABLE `driverapplications` (
 
 LOCK TABLES `driverapplications` WRITE;
 /*!40000 ALTER TABLE `driverapplications` DISABLE KEYS */;
-INSERT INTO `driverapplications` VALUES (4,23,'039845616','Polo GTI','NCW 2845 ND',3,'Blue','','','Deactivated'),(5,25,'0766985412','Golf 8','NPS 8465 73',2,'Green','','','Rejected'),(12,32,'0731112233','Honda Fit','ECZ 1234 GP',4,'Silver','','','Approved'),(13,33,'0724445566','VW Polo TSI','ECT 5678 GP',4,'White','','','Pending Review'),(14,34,'0839998877','Nissan March','ECL 9012 GP',4,'Red','','','Rejected'),(15,35,'063546214','Toyota Controller','NJG 4534',3,'Blue','','','Pending Review'),(16,36,'0635485798','Polo TSI','NCW 345 6',3,'Yellow','','','Pending Review'),(17,37,'0788563421','Audi RS7','HGY 374 EC',4,'Red','','','Approved'),(18,39,'0769854267','Toyota Tazz','NCW 23344',3,'Red','','','Approved'),(20,49,'092342407','Toyota Controlla','NMU 34  GH',3,'fghfgh','','','Pending Review'),(21,50,'0635645857','Toyata Avanza','NPS 256 ZN',7,'Blue','','','Rejected'),(22,51,'063546587','Toyota Raris','NCW 564 ZN',4,'Silver grey','https://res.cloudinary.com/pa06ps7x/image/upload/v1789467580/getyourride/driver-applications/22/DriversLicence.png','https://res.cloudinary.com/pa06ps7x/image/upload/v1789467586/getyourride/driver-applications/22/VehicleRegistration.png','Approved');
+INSERT INTO `driverapplications` (`ApplicationID`,`driver_id`,`contact_number`,`vehicle_make_model`,`registration_number`,`seating_capacity`,`vehicle_color`,`license_image_path`,`registration_file_path`,`application_status`) VALUES (4,23,'039845616','Polo GTI','NCW 2845 ND',3,'Blue','','','Deactivated'),(5,25,'0766985412','Golf 8','NPS 8465 73',2,'Green','','','Rejected'),(12,32,'0731112233','Honda Fit','ECZ 1234 GP',4,'Silver','','','Approved'),(13,33,'0724445566','VW Polo TSI','ECT 5678 GP',4,'White','','','Pending Review'),(14,34,'0839998877','Nissan March','ECL 9012 GP',4,'Red','','','Rejected'),(15,35,'063546214','Toyota Controller','NJG 4534',3,'Blue','','','Pending Review'),(16,36,'0635485798','Polo TSI','NCW 345 6',3,'Yellow','','','Pending Review'),(17,37,'0788563421','Audi RS7','HGY 374 EC',4,'Red','','','Approved'),(18,39,'0769854267','Toyota Tazz','NCW 23344',3,'Red','','','Approved'),(20,49,'092342407','Toyota Controlla','NMU 34  GH',3,'fghfgh','','','Pending Review'),(21,50,'0635645857','Toyata Avanza','NPS 256 ZN',7,'Blue','','','Rejected'),(22,51,'063546587','Toyota Raris','NCW 564 ZN',4,'Silver grey','https://res.cloudinary.com/pa06ps7x/image/upload/v1789467580/getyourride/driver-applications/22/DriversLicence.png','https://res.cloudinary.com/pa06ps7x/image/upload/v1789467586/getyourride/driver-applications/22/VehicleRegistration.png','Approved');
 /*!40000 ALTER TABLE `driverapplications` ENABLE KEYS */;
 UNLOCK TABLES;
 

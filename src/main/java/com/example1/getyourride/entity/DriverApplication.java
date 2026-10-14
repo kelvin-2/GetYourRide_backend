@@ -86,4 +86,22 @@ public class DriverApplication {
     @Column(name = "application_status")
 
     private String applicationStatus = "Pending Review";
+
+
+
+    @Column(name = "rejection_reason")
+
+    private String rejectionReason;
+
+
+
+    @Column(name = "reviewed_by")
+
+    private String reviewedBy;
+
+
+
+    @Column(name = "reviewed_at")
+
+    private java.time.LocalDateTime reviewedAt;
 }
