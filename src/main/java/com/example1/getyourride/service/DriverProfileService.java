@@ -99,7 +99,7 @@ public class DriverProfileService {
 
         // ── Ratings & reviews aggregation (empty-safe) ──
         Double avg = tripReviewRepo.findAverageRatingByDriverId(driverId);
-        double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0; // 1dp, 0 when none
+        Double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : null; // 1dp, null when none
         int reviewCount = tripReviewRepo.countByDriverId(driverId);
         List<String> reviewTags = tripReviewRepo.findDistinctTagsByDriverId(driverId);
         if (reviewTags == null) {
@@ -113,6 +113,14 @@ public class DriverProfileService {
                 + tripRepo.countByDriverIdAndStatus(driverId, "CONFIRMED")
                 + tripRepo.countByDriverIdAndStatus(driverId, "IN_PROGRESS");
         int totalPassengers = bookingRepo.countPassengersByDriverId(driverId);
+
+        // ── Rejection details (read straight from the driverapplications columns) ──
+        // The reason comes from the rejection_reason column; reviewer/time come from
+        // reviewed_by / reviewed_at. These are only populated when an admin rejects.
+        String rejectionReason = app != null ? app.getRejectionReason() : null;
+        String reviewedBy = app != null ? app.getReviewedBy() : null;
+        String reviewedAt = app != null && app.getReviewedAt() != null
+                ? app.getReviewedAt().toString() : null;
 
         // ── Application detail (document URLs + make/model as applied) ──
         String applicationVehicleMakeModel = app != null && app.getVehicleMakeModel() != null
@@ -137,6 +145,10 @@ public class DriverProfileService {
                 .applicationStatus(applicationStatus)
                 .driversLicenceStatus(licenceStatus)
                 .vehicleRegistrationStatus(registrationStatus)
+                // Rejection details sourced from the rejection_reason column
+                .rejectionReason(rejectionReason)
+                .reviewedBy(reviewedBy)
+                .reviewedAt(reviewedAt)
                 // 4. Driver stats
                 .totalTrips(driver.getTotalTrips())
                 .joinDate(driver.getJoinDate() != null ? driver.getJoinDate().toString() : null)

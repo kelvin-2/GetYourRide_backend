@@ -37,3 +37,9 @@ Reason: Populated routeName and slotTime from shuttle route and time slot entiti
 [2026-09-19 12:10]
 Added: TripReview.java, TripReviewRepository.java, TripReviewService.java, TripReviewServiceImpl.java, TripReviewController.java, TripRatingRequest.java
 Reason: Implemented a rating route where students can rate drivers for trips they have boarded. Included validation to ensure students can only rate their own boarded trips and cannot rate the same trip twice.
+
+[2026-10-13 18:25]
+Modified: DriverProfileResponse.java, DriverProfileService.java, TripResponse.java, TripServiceImpl.java
+Reason: Updated driver rating logic to return null instead of 0.0 for unrated drivers. Added driverRating to TripResponse to display driver quality during trip selection.
+Modified: TripServiceImplTest.java
+Reason: Updated tests to verify the new rating logic and TripResponse fields.

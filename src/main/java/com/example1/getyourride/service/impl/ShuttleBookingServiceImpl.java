@@ -1,11 +1,13 @@
 package com.example1.getyourride.service.impl;
 
 import com.example1.getyourride.dto.response.BookingResponse;
+import com.example1.getyourride.dto.response.ShuttleAvailabilityResponse;
 import com.example1.getyourride.dto.response.ShuttleBookingSummaryResponse;
 import com.example1.getyourride.dto.response.TripResponse;
 import com.example1.getyourride.dto.response.TripStopResponse;
 import com.example1.getyourride.entity.*;
 import com.example1.getyourride.exception.BadRequestException;
+import com.example1.getyourride.exception.CampusRequiredException;
 import com.example1.getyourride.exception.ConflictException;
 import com.example1.getyourride.exception.ResourceNotFoundException;
 import com.example1.getyourride.repository.BoardingLogRepository;
@@ -14,10 +16,13 @@ import com.example1.getyourride.repository.StudentRepository;
 import com.example1.getyourride.repository.TripRepository;
 import com.example1.getyourride.security.QrTokenUtil;
 import com.example1.getyourride.service.ShuttleBookingService;
+import com.example1.getyourride.validation.CampusValidationUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -74,11 +79,21 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
             throw new BadRequestException("Only funded students can book shuttles");
         }
 
+<<<<<<< HEAD
         // Duplicate check. A CANCELLED booking does not count, otherwise a student who cancelled
         // could never book this shuttle again. The cancelled row is reused (one row per
         // trip + student) and goes back to CONFIRMED so the driver's list shows them again.
         Optional<Booking> existingBooking = bookingRepository.findByTripAndStudent(trip, student);
         if (existingBooking.isPresent() && existingBooking.get().getBookingStatus() != BookingStatus.CANCELLED) {
+=======
+        // Validate that at least one stop is a campus
+        if (!CampusValidationUtils.hasCampusStop(trip)) {
+            throw new CampusRequiredException();
+        }
+
+        // Check for duplicate booking
+        if (bookingRepository.findByTripAndStudent(trip, student).isPresent()) {
+>>>>>>> aa93e2609bcca29f1f15d1854a8ba51ed52efa17
             throw new ConflictException("Student already has a booking for this trip");
         }
 
@@ -119,6 +134,28 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
                 .bookingConfirmation(confirmation)
                 .myShuttleTrips(myShuttleTrips)
                 .allShuttleTrips(allShuttleTrips)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ShuttleAvailabilityResponse getAvailableShuttles(LocalDate date) {
+        List<TripResponse> trips = tripRepository
+                .findActiveShuttlesBetween(date.atStartOfDay(), date.plusDays(1).atStartOfDay())
+                .stream()
+                .map(this::mapToTripResponse)
+                .collect(Collectors.toList());
+
+        boolean available = !trips.isEmpty();
+        String message = available ? null
+                : "No shuttles are running on " + date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy"))
+                + ". Please try another day.";
+
+        return ShuttleAvailabilityResponse.builder()
+                .date(date)
+                .available(available)
+                .message(message)
+                .trips(trips)
                 .build();
     }
 

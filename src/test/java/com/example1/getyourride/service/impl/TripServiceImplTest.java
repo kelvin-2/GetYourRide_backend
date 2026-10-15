@@ -40,6 +40,14 @@ class TripServiceImplTest {
     private GeocodingService geocodingService;
     @Mock
     private TripSimulationService tripSimulationService;
+    @Mock
+    private com.example1.getyourride.service.TripRouteService tripRouteService;
+    @Mock
+    private com.example1.getyourride.service.NotificationService notificationService;
+    @Mock
+    private com.example1.getyourride.repository.BoardingLogRepository boardingLogRepository;
+    @Mock
+    private com.example1.getyourride.repository.TripReviewRepository tripReviewRepository;
 
     @InjectMocks
     private TripServiceImpl tripService;
@@ -268,6 +276,7 @@ class TripServiceImplTest {
         tripWithSeats.setAvailableSeats(3);
         tripWithSeats.setStatus("SCHEDULED");
         tripWithSeats.setDriver(new com.example1.getyourride.entity.Driver());
+        tripWithSeats.getDriver().setDriverId(10L);
         tripWithSeats.getDriver().setFirstName("Driver");
         tripWithSeats.getDriver().setLastName("One");
 
@@ -276,6 +285,7 @@ class TripServiceImplTest {
         tripWithNoSeats.setAvailableSeats(0);
         tripWithNoSeats.setStatus("SCHEDULED");
         tripWithNoSeats.setDriver(new com.example1.getyourride.entity.Driver());
+        tripWithNoSeats.getDriver().setDriverId(11L);
         tripWithNoSeats.getDriver().setFirstName("Driver");
         tripWithNoSeats.getDriver().setLastName("Two");
 
@@ -287,4 +297,57 @@ class TripServiceImplTest {
         assertEquals(1L, results.get(0).getTripId());
     }
 
+    @Test
+    void getTripsByStatus_IncludesDriverRating() {
+        String email = "student@test.com";
+        Student student = new Student();
+        student.setIsFunded(false);
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+
+        Trip trip = new Trip();
+        trip.setTripId(1L);
+        trip.setAvailableSeats(3);
+        trip.setStatus("SCHEDULED");
+        
+        com.example1.getyourride.entity.Driver driver = new com.example1.getyourride.entity.Driver();
+        driver.setDriverId(10L);
+        driver.setFirstName("John");
+        driver.setLastName("Doe");
+        trip.setDriver(driver);
+
+        when(tripRepository.findByStatus("SCHEDULED")).thenReturn(List.of(trip));
+        when(tripReviewRepository.findAverageRatingByDriverId(10L)).thenReturn(4.55);
+
+        List<TripResponse> results = tripService.getTripsByStatus("SCHEDULED", email);
+
+        assertEquals(1, results.size());
+        assertEquals(4.6, results.get(0).getDriverRating()); // Rounded to 1dp
+    }
+
+    @Test
+    void getTripsByStatus_NullDriverRating_WhenNoReviews() {
+        String email = "student@test.com";
+        Student student = new Student();
+        student.setIsFunded(false);
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+
+        Trip trip = new Trip();
+        trip.setTripId(1L);
+        trip.setAvailableSeats(3);
+        trip.setStatus("SCHEDULED");
+        
+        com.example1.getyourride.entity.Driver driver = new com.example1.getyourride.entity.Driver();
+        driver.setDriverId(10L);
+        driver.setFirstName("John");
+        driver.setLastName("Doe");
+        trip.setDriver(driver);
+
+        when(tripRepository.findByStatus("SCHEDULED")).thenReturn(List.of(trip));
+        when(tripReviewRepository.findAverageRatingByDriverId(10L)).thenReturn(null);
+
+        List<TripResponse> results = tripService.getTripsByStatus("SCHEDULED", email);
+
+        assertEquals(1, results.size());
+        assertNull(results.get(0).getDriverRating());
+    }
 }

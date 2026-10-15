@@ -38,6 +38,14 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findByTripTypeIgnoreCase(String tripType);
 
     @EntityGraph(attributePaths = {"driver", "vehicle"})
+    @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE LOWER(t.tripType) = 'shuttle' " +
+            "AND UPPER(t.status) NOT IN ('CANCELLED', 'COMPLETED') " +
+            "AND t.departureTime >= :start AND t.departureTime < :end ORDER BY t.departureTime")
+    List<Trip> findActiveShuttlesBetween(
+            @org.springframework.data.repository.query.Param("start") java.time.LocalDateTime start,
+            @org.springframework.data.repository.query.Param("end") java.time.LocalDateTime end);
+
+    @EntityGraph(attributePaths = {"driver", "vehicle"})
     @org.springframework.data.jpa.repository.Query("SELECT t FROM Trip t WHERE " +
             "LOWER(t.departureStop) LIKE LOWER(CONCAT('%', :departure, '%')) AND " +
             "LOWER(t.destinationStop) LIKE LOWER(CONCAT('%', :destination, '%')) AND " +

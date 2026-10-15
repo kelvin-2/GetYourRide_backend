@@ -3,12 +3,16 @@ package com.example1.getyourride.controller;
 import com.example1.getyourride.dto.request.BoardingRequest;
 import com.example1.getyourride.dto.response.BookingResponse;
 import com.example1.getyourride.dto.response.QrCodeResponse;
+import com.example1.getyourride.dto.response.ShuttleAvailabilityResponse;
 import com.example1.getyourride.dto.response.ShuttleBookingSummaryResponse;
 import com.example1.getyourride.service.QrCodeService;
 import com.example1.getyourride.service.ShuttleBookingService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/shuttle")
@@ -21,6 +25,13 @@ public class ShuttleBookingController {
                                    QrCodeService qrCodeService) {
         this.shuttleBookingService = shuttleBookingService;
         this.qrCodeService = qrCodeService;
+    }
+
+    /** Lists shuttles for a day; returns available=false plus a message when none run. */
+    @GetMapping("/available")
+    public ResponseEntity<ShuttleAvailabilityResponse> getAvailableShuttles(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(shuttleBookingService.getAvailableShuttles(date));
     }
 
     @PostMapping("/book/{tripId}")

@@ -18,6 +18,15 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(CampusRequiredException.class)
+    public ResponseEntity<Map<String, String>> handleCampusRequired(CampusRequiredException ex) {
+        log.warn("Campus required: {}", ex.getMessage());
+        Map<String, String> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        body.put("errorCode", CampusRequiredException.ERROR_CODE);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(BadRequestException ex) {
         log.error("Bad Request: {}", ex.getMessage());
