@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -223,6 +225,15 @@ public class TripServiceImpl implements TripService {
                     tripId, describe(request.getPickupStop()), describe(request.getDropOffStop()));
         }
 
+        // Re-booking after a cancellation: the cancelled booking left its stops on the trip, so
+        // drop them first or the driver would see this student listed twice.
+        if (existingBooking.isPresent()) {
+            Long studentId = student.getStudentId();
+            new ArrayList<>(trip.getStops()).stream()
+                    .filter(s -> s.getStudent() != null && studentId.equals(s.getStudent().getStudentId()))
+                    .forEach(trip::removeStop);
+        }
+
         TripStop pickupStop = new TripStop();
         pickupStop.setTrip(trip);
         pickupStop.setStudent(student);
@@ -352,36 +363,46 @@ public class TripServiceImpl implements TripService {
     @Transactional
     public TripResponse cancelTrip(Long tripId) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        
-        // If the caller is a student, they should only be able to cancel their own booking,
-        // not the entire trip. This is true for all students.
-        Optional<Student> studentOpt = studentRepository.findByEmail(email);
-        if (studentOpt.isPresent()) {
-            log.info("Student {} attempted to cancel trip {} via cancelTrip; redirecting to cancelBooking", email, tripId);
-            return cancelBooking(tripId);
-        }
 
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
+        // Decide driver vs passenger by TRIP OWNERSHIP, not by "is this email a Student".
+        // A student-driver is also a Student, so the old Student-table check wrongly rerouted
+        // the driver's cancellation into cancelBooking: the trip stayed active and nobody
+        // was notified. Only the trip's own driver may cancel the whole trip; anyone else
+        // is cancelling their own seat.
+        boolean isTripOwner = trip.getDriver() != null
+                && trip.getDriver().getEmail() != null
+                && trip.getDriver().getEmail().equalsIgnoreCase(email);
+
+        if (!isTripOwner) {
+            log.info("Caller {} does not own trip {}; redirecting to cancelBooking", email, tripId);
+            return cancelBooking(tripId);
+        }
+
+        // Notify BEFORE flipping booking statuses: notifyRideCancelled only targets CONFIRMED
+        // seats, so running it after the bulk update to CANCELLED created zero notifications.
+        // Failures here must not roll back the cancellation.
+        try {
+            notificationService.notifyRideCancelled(trip);
+        } catch (Exception e) {
+            log.warn("Trip {} cancellation notifications failed: {}", tripId, e.getMessage());
+        }
+
+        // trip.status = CANCELLED
         trip.setStatus("CANCELLED");
         Trip saved = tripRepository.save(trip);
 
-        // Update all associated bookings to CANCELLED
+        // trip_booking.booking_status = CANCELLED for every booking on this trip
         List<Booking> bookings = bookingRepository.findByTrip(trip);
         for (Booking booking : bookings) {
             booking.setBookingStatus(BookingStatus.CANCELLED);
             bookingRepository.save(booking);
         }
 
-        // Let any students who had booked this trip know it was cancelled. Creates nothing
-        // if no one is booked. Notification failures must not roll back the cancellation.
-        try {
-            notificationService.notifyRideCancelled(saved);
-        } catch (Exception e) {
-            log.warn("Trip {} cancelled but failed to create cancellation notifications: {}",
-                    tripId, e.getMessage());
-        }
+        log.info("Driver {} cancelled trip {}; {} booking(s) set to CANCELLED",
+                email, tripId, bookings.size());
 
         return mapToResponse(saved);
     }
@@ -547,6 +568,17 @@ public class TripServiceImpl implements TripService {
             builder.slotTime(slotStr);
         }
 
+        // Read trip_booking so each student stop carries that student's current booking status.
+        // Only queried when the trip actually has student stops.
+        Map<Long, String> bookingStatusByStudent = new HashMap<>();
+        if (trip.getStops() != null && trip.getStops().stream().anyMatch(s -> s.getStudent() != null)) {
+            for (Booking b : bookingRepository.findByTrip(trip)) {
+                if (b.getStudent() != null && b.getBookingStatus() != null) {
+                    bookingStatusByStudent.put(b.getStudent().getStudentId(), b.getBookingStatus().name());
+                }
+            }
+        }
+
         return builder
                 .tripType(trip.getTripType())
                 .departureStop(trip.getDepartureStop())
@@ -575,6 +607,9 @@ public class TripServiceImpl implements TripService {
                                 .status(stop.getStatus())
                                 .studentId(stop.getStudent() != null ? stop.getStudent().getStudentId() : null)
                                 .studentName(stop.getStudent() != null ? stop.getStudent().getFirstName() + " " + stop.getStudent().getLastName() : null)
+                                .bookingStatus(stop.getStudent() != null
+                                        ? bookingStatusByStudent.get(stop.getStudent().getStudentId())
+                                        : null)
                                 .build())
                         .collect(Collectors.toList()) : null)
                 .build();
