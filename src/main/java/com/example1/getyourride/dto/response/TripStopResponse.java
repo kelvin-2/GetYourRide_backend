@@ -20,6 +20,16 @@ public class TripStopResponse {
     private String studentName;
 
     /**
+     * The booked student's current {@code trip_booking.booking_status} for this trip
+     * (CONFIRMED, CANCELLED, BOARDED, ...). Null for stops that don't belong to a student.
+     *
+     * <p>The driver's passenger list is built from the student stops, which are not removed when a
+     * student cancels. Exposing the booking status lets the driver app show who is still booked and
+     * who has cancelled.
+     */
+    private String bookingStatus;
+
+    /**
      * PENDING or ARRIVED.
      *
      * <p>Exposed so a client opening the tracking screen mid-trip can draw which stops have already
