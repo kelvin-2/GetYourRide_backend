@@ -182,8 +182,10 @@ public class ShuttleDriverService {
         Optional<Vehicle> vehicleOpt = vehicleRepository.findFirstByDriverDriverId(driverId);
         int capacity = vehicleOpt.map(Vehicle::getCapacity).orElse(0);
 
-        // Count booked and boarded students
-        List<Booking> bookings = bookingRepository.findByTrip(trip);
+        // Count booked and boarded students. Cancelled bookings no longer hold a seat.
+        List<Booking> bookings = bookingRepository.findByTrip(trip).stream()
+                .filter(b -> b.getBookingStatus() != BookingStatus.CANCELLED)
+                .collect(java.util.stream.Collectors.toList());
         int totalBooked = bookings.size();
         int totalBoarded = 0;
 
@@ -224,6 +226,10 @@ public class ShuttleDriverService {
             Student student = booking.getStudent();
             if (student == null) continue;
 
+            // A student who cancelled (trip_booking.booking_status = CANCELLED) must not appear
+            // on the driver's boarding list.
+            if (booking.getBookingStatus() == BookingStatus.CANCELLED) continue;
+
             // Check boarding status
             Optional<BoardingLog> logOpt = boardingLogRepository.findByBooking(booking);
             String boardedAt = null;
@@ -255,6 +261,13 @@ public class ShuttleDriverService {
     public MarkAsBoardedResponse markAsBoarded(Long bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found with ID: " + bookingId));
+
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            return MarkAsBoardedResponse.builder()
+                    .success(false)
+                    .message("Cannot board: this booking was cancelled")
+                    .build();
+        }
 
         Trip trip = booking.getTrip();
         if ("COMPLETED".equalsIgnoreCase(trip.getStatus())) {
@@ -290,6 +303,10 @@ public class ShuttleDriverService {
         LocalDateTime now = LocalDateTime.now();
         log.setBoardedAt(now);
         boardingLogRepository.save(log);
+
+        // Keep trip_booking in step with the boarding log, the same as the QR-scan path does.
+        booking.setBookingStatus(BookingStatus.BOARDED);
+        bookingRepository.save(booking);
 
         return MarkAsBoardedResponse.builder()
                 .success(true)

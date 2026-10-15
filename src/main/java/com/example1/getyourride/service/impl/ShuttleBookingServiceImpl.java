@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -78,6 +79,13 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
             throw new BadRequestException("Only funded students can book shuttles");
         }
 
+<<<<<<< HEAD
+        // Duplicate check. A CANCELLED booking does not count, otherwise a student who cancelled
+        // could never book this shuttle again. The cancelled row is reused (one row per
+        // trip + student) and goes back to CONFIRMED so the driver's list shows them again.
+        Optional<Booking> existingBooking = bookingRepository.findByTripAndStudent(trip, student);
+        if (existingBooking.isPresent() && existingBooking.get().getBookingStatus() != BookingStatus.CANCELLED) {
+=======
         // Validate that at least one stop is a campus
         if (!CampusValidationUtils.hasCampusStop(trip)) {
             throw new CampusRequiredException();
@@ -85,10 +93,11 @@ public class ShuttleBookingServiceImpl implements ShuttleBookingService {
 
         // Check for duplicate booking
         if (bookingRepository.findByTripAndStudent(trip, student).isPresent()) {
+>>>>>>> aa93e2609bcca29f1f15d1854a8ba51ed52efa17
             throw new ConflictException("Student already has a booking for this trip");
         }
 
-        Booking booking = new Booking();
+        Booking booking = existingBooking.orElseGet(Booking::new);
         booking.setTrip(trip);
         booking.setStudent(student);
         booking.setBookingDate(LocalDateTime.now());

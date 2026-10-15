@@ -572,10 +572,9 @@ public class TripServiceImpl implements TripService {
             builder.slotTime(slotStr);
         }
 
-<<<<<<< HEAD
         Double avg = tripReviewRepository.findAverageRatingByDriverId(trip.getDriver().getDriverId());
         Double driverRating = avg != null ? Math.round(avg * 10.0) / 10.0 : null;
-=======
+
         // Read trip_booking so each student stop carries that student's current booking status.
         // Only queried when the trip actually has student stops.
         Map<Long, String> bookingStatusByStudent = new HashMap<>();
@@ -586,7 +585,6 @@ public class TripServiceImpl implements TripService {
                 }
             }
         }
->>>>>>> 7ea4c0e70612d90c8d87de867653f4e74b00e84c
 
         return builder
                 .tripType(trip.getTripType())
